@@ -1,8 +1,6 @@
 package org.hibernate.rx.impl;
 
-import java.sql.PreparedStatement;
 import java.util.concurrent.CompletionStage;
-import java.util.function.BiConsumer;
 
 import org.hibernate.HibernateException;
 import org.hibernate.boot.model.domain.EntityMapping;
@@ -22,14 +20,12 @@ import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.rx.sql.exec.spi.RxMutation;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.Clause;
-import org.hibernate.sql.ast.consume.spi.InsertToJdbcInsertConverter;
 import org.hibernate.sql.ast.produce.sqm.spi.Callback;
 import org.hibernate.sql.ast.tree.spi.InsertStatement;
 import org.hibernate.sql.ast.tree.spi.expression.ColumnReference;
 import org.hibernate.sql.ast.tree.spi.expression.LiteralParameter;
 import org.hibernate.sql.ast.tree.spi.from.TableReference;
 import org.hibernate.sql.exec.spi.ExecutionContext;
-import org.hibernate.sql.exec.spi.JdbcMutation;
 import org.hibernate.sql.exec.spi.ParameterBindingContext;
 
 public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeDescriptor<T> implements
@@ -43,6 +39,7 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 		super( bootMapping, superTypeDescriptor, creationContext );
 	}
 
+	@Override
 	protected Object insertInternal(
 			Object id,
 			Object[] fields,
@@ -62,7 +59,7 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 
 		// for now - just root table
 		// for now - we also regenerate these SQL AST objects each time - we can cache these
-		executeInsert( fields, session, unresolvedId, executionContext, new TableReference( getPrimaryTable(), null, false) );
+		executeInsert( fields, session, unresolvedId, executionContext, new TableReference( getPrimaryTable(), null, false), null );
 
 //		getSecondaryTableBindings().forEach(
 //				tableBindings -> executeJoinTableInsert(
@@ -109,7 +106,8 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 			SharedSessionContractImplementor session,
 			Object unresolvedId,
 			ExecutionContext executionContext,
-			TableReference tableReference) {
+			TableReference tableReference,
+			CompletionStage<Void> stage) {
 
 		final InsertStatement insertStatement = new InsertStatement( tableReference );
 		// todo (6.0) : account for non-generated identifiers
@@ -180,7 +178,7 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 				}
 		);
 
-//		executeInsert( executionContext, insertStatement );
+		executeOperation( executionContext, insertStatement, stage );
 	}
 
 	private void executeJoinTableInsert(
@@ -188,9 +186,11 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 			SharedSessionContractImplementor session,
 			Object unresolvedId,
 			ExecutionContext executionContext,
-			JoinedTableBinding tableBindings) {
+			JoinedTableBinding tableBindings,
+			CompletionStage<Void> stage) {
 		if ( tableBindings.isInverse() ) {
-			return;
+			stage.toCompletableFuture().complete( null );
+			return ;
 		}
 
 		final TableReference tableReference = new TableReference( tableBindings.getReferringTable(), null , tableBindings.isOptional());
@@ -224,7 +224,8 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 		);
 
 		if ( jdbcValuesToInsert.areAllNull() ) {
-			return;
+			stage.toCompletableFuture().complete( null );
+			return ;
 		}
 
 		getHierarchy().getIdentifierDescriptor().dehydrate(
@@ -260,27 +261,14 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 			);
 		}
 
-		executeOperation( executionContext, insertStatement );
+		executeOperation( executionContext, insertStatement, stage );
 	}
 
-	private CompletionStage<?> executeOperation(ExecutionContext executionContext, InsertStatement insertStatement) {
+	private void executeOperation(ExecutionContext executionContext, InsertStatement insertStatement, CompletionStage<Void> stage) {
 		RxMutation mutation = InsertToRxInsertConverter.createRxInsert( insertStatement, executionContext.getSession().getSessionFactory() );
 		RxMutationExecutor executor = new RxMutationExecutor();
-		return executor.execute(
-				mutation,
-				executionContext );
+		executor.execute( mutation, executionContext, stage );
 	}
-
-//
-//	private void executeInsert(ExecutionContext executionContext, InsertStatement insertStatement) {
-//		JdbcMutation jdbcInsert = InsertToJdbcInsertConverter.createJdbcInsert(
-//				insertStatement,
-//				executionContext.getSession().getSessionFactory()
-//		);
-//		executeOperation( executionContext, jdbcInsert, (rows, prepareStatement) -> {} );
-//	}
-
-
 
 	private void addInsertColumn(
 			SharedSessionContractImplementor session,

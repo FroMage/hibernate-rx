@@ -3,30 +3,44 @@ package org.hibernate.rx.impl;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiConsumer;
-
 import javax.persistence.EntityTransaction;
 
+import org.hibernate.Transaction;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
+import org.hibernate.event.spi.PersistEventListener;
+import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.RxQuery;
 import org.hibernate.rx.RxSession;
 import org.hibernate.rx.StateControl;
+import org.hibernate.rx.event.RxPersistEvent;
 import org.hibernate.service.ServiceRegistry;
 
 public class RxSessionImpl implements RxSession {
-	private final RxHibernateSessionFactory factory;
-	private final SessionImplementor delegate;
 
-	public RxSessionImpl(RxHibernateSessionFactory factory, SessionImplementor session) {
+	// Might make sense to have a service or delegator for this
+	private Executor executor = ForkJoinPool.commonPool();
+	private final RxHibernateSessionFactory factory;
+	private final RxHibernateSession rxHibernateSession;
+	private CompletionStage<?> stage;
+
+
+	public RxSessionImpl(RxHibernateSessionFactory factory, RxHibernateSession session) {
+		this( factory, session, new CompletableFuture<>() );
+	}
+
+	public <T> RxSessionImpl(RxHibernateSessionFactory factory, RxHibernateSession session, CompletionStage<T> stage) {
 		this.factory = factory;
-		this.delegate = session;
+		this.rxHibernateSession = session;
+		this.stage = stage;
 	}
 
 	@Override
@@ -35,18 +49,29 @@ public class RxSessionImpl implements RxSession {
 //		RxConnection connection = poolProvider.getConnection();
 //		return connection.inTransaction( consumer, this );
 		return CompletableFuture.runAsync( () -> {
-												   System.out.println( "Begin Transaction" );
-												   delegate.getTransaction().begin();
-												   consumer.accept( this, delegate.getTransaction() );
-										   }
-		);
+			System.out.println( "Begin Transaction" );
+			Transaction tx = rxHibernateSession.getTransaction();
+			tx.begin();
+			try {
+				consumer.accept( new RxSessionImpl( factory, rxHibernateSession, stage ), tx );
+			}
+			// Catch exceptions
+			finally {
+				if ( tx.isActive() && !tx.getRollbackOnly() ) {
+					tx.commit();
+				}
+				else {
+					tx.rollback();
+				}
+			}
+		} );
 	}
 
 	@Override
 	public <T> CompletionStage<Optional<T>> find(Class<T> entityClass, Object id) {
 		return CompletableFuture.supplyAsync( () -> {
 			System.out.println( "Start find" );
-			T result = delegate.find( entityClass, id );
+			T result = rxHibernateSession.find( entityClass, id );
 			System.out.println( "Return result: " + result );
 			return Optional.ofNullable( result );
 		} );
@@ -55,41 +80,20 @@ public class RxSessionImpl implements RxSession {
 	@Override
 	public CompletionStage<Void> persist(Object entity) {
 		return CompletableFuture.runAsync( () -> {
-			System.out.println( "Start persist" );
-			delegate.persist( entity );
-			System.out.println( "End persist" );
+			schedulePersist( entity, null );
 		} );
 	}
 
-//
-//	private void firePersist(RxPersistEvent event) {
-//		try {
-//			// checkTransactionSynchStatus();
-//			// checkNoUnresolvedActionsBeforeOperation();
-//
-//			delegate.persist(  );
-//			for ( RxPersistEventListener listener : listeners( EventType.PERSIST ) ) {
-//				listener.onPersist( event );
-//			}
-//		}
-//		catch (MappingException e) {
-//			throw exceptionConverter().convert( new IllegalArgumentException( e.getMessage() ) );
-//		}
-//		catch (RuntimeException e) {
-//			throw exceptionConverter().convert( e );
-//		}
-//		finally {
-////			try {
-////				checkNoUnresolvedActionsAfterOperation();
-////			}
-////			catch (RuntimeException e) {
-////				throw exceptionConverter.convert( e );
-////			}
-//		}
-//	}
+	// Should be similar to firePersist
+	private void schedulePersist(Object entity, CompletionStage<?> stage) {
+		for ( PersistEventListener listener : listeners( EventType.PERSIST ) ) {
+			RxPersistEvent event = new RxPersistEvent( null, entity, rxHibernateSession, this, stage );
+			listener.onPersist( event );
+		}
+	}
 
 	private ExceptionConverter exceptionConverter() {
-		return delegate.unwrap( EventSource.class ).getExceptionConverter();
+		return rxHibernateSession.unwrap( EventSource.class ).getExceptionConverter();
 	}
 
 	private <T> Iterable<T> listeners(EventType<T> type) {
@@ -105,7 +109,7 @@ public class RxSessionImpl implements RxSession {
 	@Override
 	public CompletionStage<Void> remove(Object entity) {
 		return CompletableFuture.runAsync( () -> {
-			delegate.remove( entity );
+			rxHibernateSession.remove( entity );
 		} );
 	}
 

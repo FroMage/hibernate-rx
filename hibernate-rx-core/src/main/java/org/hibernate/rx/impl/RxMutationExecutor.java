@@ -16,43 +16,26 @@ import io.reactiverse.pgclient.PgRowSet;
 
 public class RxMutationExecutor {
 
-	public CompletionStage<?> execute(RxMutation operation, ExecutionContext executionContext) {
+	public void execute(RxMutation operation, ExecutionContext executionContext, CompletionStage<Void> stage) {
 		RxConnectionPoolProvider poolProvider = executionContext.getSession()
 				.getSessionFactory()
 				.getServiceRegistry()
 				.getService( RxConnectionPoolProvider.class );
 
 		RxConnection connection = poolProvider.getConnection();
-		
-		CompletableFuture c = new CompletableFuture<Object>();
-
-		return CompletableFuture.runAsync( () -> {
-			connection.unwrap(PgPool.class).getConnection(ar1 -> {
+		connection.unwrap(PgPool.class).getConnection(ar1 -> {
 				PgConnection pgConnection = ar1.result();
 				pgConnection.prepare(operation.getSql(), (ar2) -> {
 					if (ar2.succeeded()) {
 						PgPreparedQuery preparedQuery = ar2.result();
-						int paramBindingPosition = 1;
-						for (RxParameterBinder parameterBinder : operation.getParameterBinders()) {
-							paramBindingPosition += parameterBinder.bindParameterValue(
-								preparedQuery,
-								paramBindingPosition,
-								executionContext
-							);
-						}
+						// TODO: Set parameters
 						preparedQuery.execute((queryResult) -> {
 							final PgRowSet result = queryResult.result();
-
+							stage.toCompletableFuture().complete( null );
 							pgConnection.close();
 						});
 					}
-
-					//				int rows = ps.executeUpdate();
-//				expectationCkeck.accept( rows, preparedStatement );
 				});
-
-
 			});
-		});
 	}
 }
