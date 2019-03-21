@@ -9,11 +9,13 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
 
 import org.hibernate.HibernateException;
+import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.engine.jndi.spi.JndiService;
 import org.hibernate.engine.spi.SessionBuilderImplementor;
 import org.hibernate.engine.spi.SessionFactoryDelegatingImpl;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.internal.SessionFactoryImpl;
 import org.hibernate.internal.SessionFactoryRegistry;
@@ -50,7 +52,12 @@ public class RxHibernateSessionFactoryImpl extends SessionFactoryDelegatingImpl 
 
 	@Override
 	public RxHibernateSession openRxSession() throws HibernateException {
-		return new RxHibernateSessionImpl( this, (EventSource) delegate().openSession() );
+		return new RxHibernateSessionImpl( this, (SessionImplementor) openSession() );
+	}
+
+	@Override
+	public Session openSession() throws HibernateException {
+		return withOptions().openSession();
 	}
 
 	@Override

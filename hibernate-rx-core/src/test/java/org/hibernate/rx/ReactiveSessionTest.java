@@ -2,6 +2,8 @@ package org.hibernate.rx;
 
 import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
@@ -9,7 +11,6 @@ import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.metamodel.model.creation.internal.PersisterClassResolverInitiator;
-import org.hibernate.rx.impl.RxSingleTableEntityTypeDescriptor;
 import org.hibernate.rx.service.RxRuntimeModelDescriptorResolver;
 
 import org.hibernate.testing.junit5.SessionFactoryBasedFunctionalTest;
@@ -21,8 +22,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vertx.junit5.Timeout;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
+import sun.security.provider.certpath.Vertex;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 @Timeout( 60_000 ) // 1 H, I need to debug
 @ExtendWith(VertxExtension.class)
@@ -78,31 +81,40 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		sessionFactoryScope().inTransaction( (session) -> {
 			session.persist( new GuineaPig( 2, "Aloi" ) );
 		} );
-		sessionFactoryScope().inTransaction( (session) -> {
+		sessionFactoryScope().inTransaction( (rxSession) -> {
 			GuineaPig guineaPig = session.find( GuineaPig.class, 2 );
 			System.out.println( "Wow!" );
 		} );
 	}
 
-
 	@Test
 	public void testReactivePersist(VertxTestContext testContext) {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		RxSession rxSession = session.getRxSession();
-		rxSession.inTransaction( (rx, tx) -> {
-			rx.persist( mibbles )
-					.whenComplete( (pig, err) -> {
-						try {
-							tx.commit();
-							assertThat( err ).isNull();
-							testContext.completeNow();
-						}
-						catch (Throwable t) {
-							testContext.failNow( t );
-							tx.rollback();
-						}
-					} );
+		assertNoError( testContext, session.reactive().inTransaction( (rxSession, tx) -> {
+			rxSession.persist( mibbles )
+				.whenComplete( (pig, err) -> {
+					try {
+						assertAll(
+								() -> assertThat( pig ).isNull(),
+								() -> assertThat( err ).isNull()
+						);
+						System.out.println( "Complete persist" );
+						testContext.completeNow();
+					}
+					catch (Throwable t) {
+						System.out.println( "error" );
+						testContext.failNow( t );
+					}
+				} );
+		}));
+	}
+
+	private void assertNoError(VertxTestContext testContext, CompletionStage<?> stage) {
+		stage.whenComplete( (res, err) -> {
+			if (err != null) {
+				testContext.failNow( err );
+			}
 		} );
 	}
 
@@ -110,41 +122,33 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	public void testReactivePersistAndThenFind(VertxTestContext testContext) {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		RxSession rxSession = session.getRxSession();
-		// TODO: Tx should be simpler, not EntityTransaction. Allow only setRollback
-		rxSession.inTransaction( (rx, tx) -> {
-			rx.persist( mibbles )
-					.whenComplete( (nope, errPersist) -> {
-						try {
-							assertThat( nope ).isNull();
-							assertThat( errPersist ).isNull();
+		try {
+			// TODO: Tx should be simpler, not EntityTransaction. Allow only setRollback
+			session.reactive().inTransaction( (rx, tx) -> {
+				rx.persist( mibbles );
+			} ).toCompletableFuture().get();
+		}
+		catch (Throwable t) {
+			testContext.failNow( t );
+		}
 
-							rx.find( GuineaPig.class, 22 )
-									.whenComplete( (pig, errFind) -> {
-										try {
-											tx.commit();
-											System.out.println( "Commit" );
-											assertThat( pig ).hasValue( mibbles );
-											testContext.completeNow();
-										}
-										catch (Throwable t) {
-											testContext.failNow( t );
-											tx.rollback();
-										}
-									} );
-						}
-						catch (Throwable t) {
-							testContext.failNow( t );
-							tx.rollback();
-						}
-					} );
-		} )
-			// Transaction completed
-			.whenComplete( (nope, err) -> {
-				if ( err != null ) {
-					testContext.failNow( err );
-				}
-			} );
+		assertNoError( testContext, session.reactive().inTransaction( (rxSession, tx) -> {
+			rxSession.find( GuineaPig.class, mibbles.getId() )
+					.whenComplete( (pig, err) ->
+						rxAssert( testContext, () -> assertAll(
+								()-> assertThat(pig).isEqualTo( mibbles ),
+								()-> assertThat(err).isNull() ) ) );
+		} ) );
+	}
+
+	private void rxAssert(VertxTestContext ctx, Runnable r) {
+		try {
+			r.run();
+			ctx.completeNow();
+		}
+		catch ( Throwable t) {
+			ctx.failNow( t );
+		}
 	}
 
 	@Entity

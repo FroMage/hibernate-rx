@@ -13,13 +13,9 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.service.internal.SessionFactoryServiceRegistryBuilderImpl;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.service.spi.SessionFactoryServiceContributor;
-import org.hibernate.service.spi.SessionFactoryServiceInitiator;
 import org.hibernate.service.spi.SessionFactoryServiceRegistry;
 import org.hibernate.service.spi.SessionFactoryServiceRegistryFactory;
 
-/**
- * Factory for the creation of OGM's {@link SessionFactoryServiceRegistry}.
- */
 public class RxSessionFactoryServiceRegistryFactoryImpl implements SessionFactoryServiceRegistryFactory {
 
 	private final ServiceRegistryImplementor theBasicServiceRegistry;

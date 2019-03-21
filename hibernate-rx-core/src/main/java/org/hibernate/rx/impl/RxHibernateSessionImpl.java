@@ -1,5 +1,7 @@
 package org.hibernate.rx.impl;
 
+import java.util.function.Consumer;
+
 import org.hibernate.FlushMode;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
@@ -18,11 +20,11 @@ import org.hibernate.event.spi.PersistEventListener;
 import org.hibernate.internal.ExceptionMapperStandardImpl;
 import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
 import org.hibernate.resource.transaction.backend.jta.internal.synchronization.ExceptionMapper;
+import org.hibernate.resource.transaction.spi.TransactionCoordinator;
 import org.hibernate.resource.transaction.spi.TransactionStatus;
 import org.hibernate.rx.RxHibernateSession;
-import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.RxSession;
-import org.hibernate.rx.engine.impl.RxHibernateSessionFactoryImpl;
+import org.hibernate.rx.engine.spi.RxActionQueue;
 import org.hibernate.rx.engine.spi.RxHibernateSessionFactoryImplementor;
 import org.hibernate.rx.event.RxPersistEvent;
 
@@ -31,16 +33,28 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 	private final RxHibernateSessionFactoryImplementor factory;
 	private final ExceptionConverter exceptionConverter;
 	private final ExceptionMapper exceptionMapper = ExceptionMapperStandardImpl.INSTANCE;
+	private transient RxActionQueue rxActionQueue;
 
 	public RxHibernateSessionImpl(RxHibernateSessionFactoryImplementor factory, SessionImplementor delegate) {
 		super( delegate );
+		this.rxActionQueue = new RxActionQueue( this );
 		this.factory = factory;
 		this.exceptionConverter = delegate.getExceptionConverter();
 	}
 
 	@Override
+	public TransactionCoordinator getTransactionCoordinator() {
+		return super.getTransactionCoordinator();
+	}
+
+	@Override
 	public RxHibernateSessionFactoryImplementor getSessionFactory() {
 		return factory;
+	}
+
+	@Override
+	public RxActionQueue getRxActionQueue() {
+		return rxActionQueue;
 	}
 
 	@Override
@@ -78,7 +92,7 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 	@Override
 	public void persist(Object object) {
 		checkOpen();
-		firePersist( new PersistEvent( null, object, this ) );
+		firePersist( new RxPersistEvent( null, object, this, this.reactive(), null ) );
 	}
 
 	private void firePersist(PersistEvent event) {
@@ -141,29 +155,29 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 		return getFactory().getServiceRegistry().getService( EventListenerRegistry.class ).getEventListenerGroup( type );
 	}
 
-//	private void managedFlush() {
-//		if ( isClosed() ) {// && !waitingForAutoClose ) {
-////			log.trace( "Skipping auto-flush due to session closed" );
-//			return;
-//		}
-////		log.trace( "Automatically flushing session" );
-//		doFlush();
-//	}
+	private void managedFlush() {
+		if ( isClosed() ) {// && !waitingForAutoClose ) {
+//			log.trace( "Skipping auto-flush due to session closed" );
+			return;
+		}
+//		log.trace( "Automatically flushing session" );
+		doFlush();
+	}
 
-//	@Override
-//	public void flushBeforeTransactionCompletion() {
-//		final boolean doFlush = isTransactionFlushable()
-//				&& getHibernateFlushMode() != FlushMode.MANUAL;
-//
-//		try {
-//			if ( doFlush ) {
-//				managedFlush();
-//			}
-//		}
-//		catch (RuntimeException re) {
-//			throw exceptionMapper.mapManagedFlushFailure( "error during managed flush", re, this );
-//		}
-//	}
+	@Override
+	public void flushBeforeTransactionCompletion() {
+		final boolean doFlush = isTransactionFlushable()
+				&& getHibernateFlushMode() != FlushMode.MANUAL;
+
+		try {
+			if ( doFlush ) {
+				managedFlush();
+			}
+		}
+		catch (RuntimeException re) {
+			throw exceptionMapper.mapManagedFlushFailure( "error during managed flush", re, this );
+		}
+	}
 
 	private boolean isTransactionFlushable() {
 		if ( getCurrentTransaction() == null ) {
@@ -180,7 +194,13 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 	}
 
 	@Override
-	public RxSession getRxSession() {
+	public RxSession reactive() {
 		return new RxSessionImpl( factory, this );
 	}
+
+	@Override
+	public void reactive(Consumer<RxSession> consumer) {
+		consumer.accept( new RxSessionImpl( factory, this ) );
+	}
 }
+
