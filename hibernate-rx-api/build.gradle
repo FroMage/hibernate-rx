@@ -7,10 +7,10 @@ description = 'Hibernate RX API'
  
 dependencies {
     implementation 'org.reactivestreams:reactive-streams:1.0.2'
+    implementation 'javax.persistence:javax.persistence-api:2.2'
 
-    // Use JUnit test framework
-    testImplementation 'junit:junit:4.12'
     testImplementation 'org.assertj:assertj-core:3.11.1'
+    testImplementation 'io.vertx:vertx-junit5:3.6.2'
 }
 
 test {
