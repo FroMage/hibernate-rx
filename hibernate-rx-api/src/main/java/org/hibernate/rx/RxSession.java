@@ -3,7 +3,6 @@ package org.hibernate.rx;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.function.BiConsumer;
-
 import javax.persistence.EntityTransaction;
 
 /**

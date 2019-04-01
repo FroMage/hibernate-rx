@@ -15,7 +15,7 @@ public class RxServiceRegistryInitializer implements ServiceContributor {
 
 //		serviceRegistryBuilder.addInitiator( RxJdbcServicesInitiator.INSTANCE );
 		serviceRegistryBuilder.addInitiator( RxSessionFactoryServiceRegistryFactoryInitiator.INSTANCE );
-		serviceRegistryBuilder.addInitiator( RxConnectionProviderInitiator.INSTANCE );
+//		serviceRegistryBuilder.addInitiator( RxConnectionProviderInitiator.INSTANCE );
 
 //		serviceRegistryBuilder.addInitiator( OgmQueryTranslatorFactoryInitiator.INSTANCE );
 //		serviceRegistryBuilder.addInitiator( OgmSessionFactoryServiceRegistryFactoryInitiator.INSTANCE );
