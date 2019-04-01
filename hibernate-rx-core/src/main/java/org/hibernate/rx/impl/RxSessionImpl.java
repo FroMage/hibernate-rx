@@ -6,7 +6,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiConsumer;
-import javax.persistence.EntityTransaction;
+import java.util.function.Consumer;
 
 import org.hibernate.Transaction;
 import org.hibernate.engine.spi.ExceptionConverter;
@@ -15,14 +15,13 @@ import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
-import org.hibernate.event.spi.PersistEventListener;
 import org.hibernate.rx.ReactiveTransaction;
+import org.hibernate.rx.ReactiveTransactionWork;
 import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.RxQuery;
 import org.hibernate.rx.RxSession;
 import org.hibernate.rx.StateControl;
-import org.hibernate.rx.event.RxPersistEvent;
 import org.hibernate.service.ServiceRegistry;
 
 public class RxSessionImpl implements RxSession {
@@ -45,13 +44,12 @@ public class RxSessionImpl implements RxSession {
 	}
 
 	@Override
-	public CompletionStage<Void> inTransaction(BiConsumer<RxSession, EntityTransaction> consumer) {
+	public CompletionStage<Void> inTransaction(Consumer<RxSession> consumer) {
 		return CompletableFuture.runAsync( () -> {
-			System.out.println( "Begin Transaction" );
 			Transaction tx = rxHibernateSession.getTransaction();
 			tx.begin();
 			try {
-				consumer.accept( new RxSessionImpl( factory, rxHibernateSession, stage ), tx );
+				consumer.accept( this );
 			}
 			// Catch exceptions
 			finally {
@@ -75,7 +73,7 @@ public class RxSessionImpl implements RxSession {
 
 	@Override
 	public CompletionStage<Void> persist(Object entity) {
-		return inTransaction( ( session, tx) -> {
+		return inTransaction( (session) -> {
 			rxHibernateSession.persist( entity );
 		} );
 	}

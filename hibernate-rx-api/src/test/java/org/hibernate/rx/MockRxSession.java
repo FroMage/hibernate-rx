@@ -51,7 +51,7 @@ public class MockRxSession implements RxSession {
 		}
 
 	@Override
-	public CompletionStage<Void> inTransaction(BiConsumer<RxSession, EntityTransaction> consumer) {
+	public CompletionStage<Void> inTransaction(Consumer<RxSession> consumer) {
 		return null;
 	}
 
