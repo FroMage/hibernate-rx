@@ -52,18 +52,7 @@ public class RxSessionImpl implements RxSession {
 			System.out.println( "Begin Transaction" );
 			Transaction tx = rxHibernateSession.getTransaction();
 			tx.begin();
-			try {
-				consumer.accept( new RxSessionImpl( factory, rxHibernateSession, stage ), tx );
-			}
-			// Catch exceptions
-			finally {
-				if ( tx.isActive() && !tx.getRollbackOnly() ) {
-					tx.commit();
-				}
-				else {
-					tx.rollback();
-				}
-			}
+			consumer.accept( new RxSessionImpl( factory, rxHibernateSession, stage ), tx );
 		} );
 	}
 
@@ -89,7 +78,13 @@ public class RxSessionImpl implements RxSession {
 		for ( PersistEventListener listener : listeners( EventType.PERSIST ) ) {
 			RxPersistEvent event = new RxPersistEvent( null, entity, rxHibernateSession, this, stage );
 			listener.onPersist( event );
+			// Let's assume there is only one
+			break;
 		}
+	}
+
+	private Executor executor() {
+		return ForkJoinPool.commonPool();
 	}
 
 	private ExceptionConverter exceptionConverter() {

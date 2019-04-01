@@ -94,17 +94,20 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		assertNoError( testContext, session.reactive().inTransaction( (rxSession, tx) -> {
 			rxSession.persist( mibbles )
 				.whenComplete( (pig, err) -> {
-					try {
-						assertAll(
-								() -> assertThat( pig ).isNull(),
-								() -> assertThat( err ).isNull()
-						);
-						System.out.println( "Complete persist" );
-						testContext.completeNow();
+					if ( err == null ) {
+						try {
+							assertThat( pig ).isNull();
+							System.out.println( "Complete persist" );
+							tx.commit();
+							testContext.completeNow();
+						}
+						catch (Throwable t) {
+							testContext.failNow( t );
+						}
 					}
-					catch (Throwable t) {
-						System.out.println( "error" );
-						testContext.failNow( t );
+					else {
+						System.out.println( "Error is not null" );
+						testContext.failNow( err );
 					}
 				} );
 		}));
@@ -126,19 +129,22 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 			// TODO: Tx should be simpler, not EntityTransaction. Allow only setRollback
 			session.reactive().inTransaction( (rx, tx) -> {
 				rx.persist( mibbles );
-			} ).toCompletableFuture().get();
+				tx.commit();
+				testContext.completeNow();
+			} );
 		}
 		catch (Throwable t) {
 			testContext.failNow( t );
 		}
-
-		assertNoError( testContext, session.reactive().inTransaction( (rxSession, tx) -> {
-			rxSession.find( GuineaPig.class, mibbles.getId() )
-					.whenComplete( (pig, err) ->
-						rxAssert( testContext, () -> assertAll(
-								()-> assertThat(pig).isEqualTo( mibbles ),
-								()-> assertThat(err).isNull() ) ) );
-		} ) );
+		System.out.println( "" );
+//
+//		assertNoError( testContext, session.reactive().inTransaction( (rxSession, tx) -> {
+//			rxSession.find( GuineaPig.class, mibbles.getId() )
+//					.whenComplete( (pig, err) ->
+//						rxAssert( testContext, () -> assertAll(
+//								()-> assertThat(pig).isPresent().hasValue( mibbles ),
+//								()-> assertThat(err).isNull() ) ) );
+//		} ) );
 	}
 
 	private void rxAssert(VertxTestContext ctx, Runnable r) {

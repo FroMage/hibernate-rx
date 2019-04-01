@@ -5,6 +5,7 @@ import java.util.Map;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.rx.service.initiator.RxConnectionProviderInitiator;
 import org.hibernate.rx.service.initiator.RxSessionFactoryServiceRegistryFactoryInitiator;
+import org.hibernate.rx.service.initiator.RxTransactionCoordinatorBuilderInitiator;
 import org.hibernate.service.spi.ServiceContributor;
 
 public class RxServiceRegistryInitializer implements ServiceContributor {
@@ -16,6 +17,7 @@ public class RxServiceRegistryInitializer implements ServiceContributor {
 //		serviceRegistryBuilder.addInitiator( RxJdbcServicesInitiator.INSTANCE );
 		serviceRegistryBuilder.addInitiator( RxSessionFactoryServiceRegistryFactoryInitiator.INSTANCE );
 		serviceRegistryBuilder.addInitiator( RxConnectionProviderInitiator.INSTANCE );
+		serviceRegistryBuilder.addInitiator( RxTransactionCoordinatorBuilderInitiator.INSTANCE );
 
 //		serviceRegistryBuilder.addInitiator( OgmQueryTranslatorFactoryInitiator.INSTANCE );
 //		serviceRegistryBuilder.addInitiator( OgmSessionFactoryServiceRegistryFactoryInitiator.INSTANCE );

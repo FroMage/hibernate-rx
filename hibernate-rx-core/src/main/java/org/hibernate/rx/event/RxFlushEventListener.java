@@ -1,6 +1,7 @@
 package org.hibernate.rx.event;
 
 import org.hibernate.HibernateException;
+import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.event.internal.AbstractFlushingEventListener;
 import org.hibernate.event.internal.DefaultFlushEventListener;
 import org.hibernate.event.spi.EventSource;
@@ -15,7 +16,33 @@ public class RxFlushEventListener extends DefaultFlushEventListener {
 
 	@Override
 	public void onFlush(FlushEvent event) throws HibernateException {
-		super.onFlush( event );
+
+		final EventSource source = event.getSession();
+		final PersistenceContext persistenceContext = source.getPersistenceContext();
+
+		if ( persistenceContext.getNumberOfManagedEntities() > 0 ||
+				persistenceContext.getCollectionEntries().size() > 0 ) {
+
+			try {
+				source.getEventListenerManager().flushStart();
+
+				flushEverythingToExecutions( event );
+				performExecutions( source );
+				postFlush( source );
+			}
+			finally {
+				source.getEventListenerManager().flushEnd(
+						event.getNumberOfEntitiesProcessed(),
+						event.getNumberOfCollectionsProcessed()
+				);
+			}
+
+			postPostFlush( source );
+
+			if ( source.getFactory().getStatistics().isStatisticsEnabled() ) {
+				source.getFactory().getStatistics().flush();
+			}
+		}
 	}
 
 	protected void performExecutions(EventSource session) {

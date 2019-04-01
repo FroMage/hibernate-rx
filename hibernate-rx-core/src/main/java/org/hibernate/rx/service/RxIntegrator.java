@@ -29,7 +29,7 @@ public class RxIntegrator implements Integrator {
 		eventListenerRegistry.addDuplicationStrategy( DefaultRxPersistEventListener.EventContextManagingPersistEventListenerDuplicationStrategy.INSTANCE );
 		eventListenerRegistry.getEventListenerGroup( EventType.PERSIST ).appendListener( new DefaultRxPersistEventListener() );
 		eventListenerRegistry.getEventListenerGroup( EventType.PERSIST_ONFLUSH ).appendListener( new DefaultRxPersistOnFlushEventListener() );
-//		eventListenerRegistry.getEventListenerGroup( EventType.FLUSH ).appendListener( new RxFlushEventListener() );
+		eventListenerRegistry.getEventListenerGroup( EventType.FLUSH ).appendListener( new RxFlushEventListener() );
 	}
 
 }

@@ -46,18 +46,18 @@ public class RxHibernateSessionFactoryImpl extends SessionFactoryDelegatingImpl 
 	}
 
 	@Override
-	public RxHibernateSessionBuilderImplementor withOptions() {
-		return new RxHibernateSessionBuilderDelegator( delegate().withOptions(), this );
-	}
-
-	@Override
 	public RxHibernateSession openRxSession() throws HibernateException {
 		return new RxHibernateSessionImpl( this, (SessionImplementor) openSession() );
 	}
 
 	@Override
 	public Session openSession() throws HibernateException {
-		return withOptions().openSession();
+		return withOptions().openRxSession();
+	}
+
+	@Override
+	public RxHibernateSessionBuilderImplementor withOptions() {
+		return new RxHibernateSessionBuilderDelegator( delegate().withOptions(), this );
 	}
 
 	@Override

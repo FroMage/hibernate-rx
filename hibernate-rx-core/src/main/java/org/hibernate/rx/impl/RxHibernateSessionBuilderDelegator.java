@@ -28,4 +28,5 @@ public class RxHibernateSessionBuilderDelegator extends AbstractDelegatingSessio
 		Session session = builder.openSession();
 		return new RxHibernateSessionImpl( factory, (EventSource) session );
 	}
+
 }
