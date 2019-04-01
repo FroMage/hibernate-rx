@@ -16,5 +16,4 @@ public interface RxHibernateSession extends Session {
 	void reactive(Consumer<RxSession> consumer);
 
 	RxActionQueue getRxActionQueue();
-
 }

@@ -67,7 +67,7 @@ public class ServiceRegistryBootstrap {
 
         // Custom RX initiators:
 
-        serviceInitiators.add( RxRuntimeModelDescriptorClassResolver.INSTANCE );
+//        serviceInitiators.add( RxRuntimeModelDescriptorClassResolver.INSTANCE );
         //TODO: Add other services
 
         // Standard ones in ORM (see org.hibernate.service.StandardServiceInitiators ) :

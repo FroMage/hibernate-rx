@@ -16,6 +16,7 @@ import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
 import org.hibernate.event.spi.PersistEventListener;
+import org.hibernate.rx.ReactiveTransaction;
 import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.RxQuery;
@@ -45,9 +46,6 @@ public class RxSessionImpl implements RxSession {
 
 	@Override
 	public CompletionStage<Void> inTransaction(BiConsumer<RxSession, EntityTransaction> consumer) {
-//		RxConnectionPoolProvider poolProvider = serviceRegistry().getService( RxConnectionPoolProvider.class );
-//		RxConnection connection = poolProvider.getConnection();
-//		return connection.inTransaction( consumer, this );
 		return CompletableFuture.runAsync( () -> {
 			System.out.println( "Begin Transaction" );
 			Transaction tx = rxHibernateSession.getTransaction();
@@ -64,32 +62,22 @@ public class RxSessionImpl implements RxSession {
 					tx.rollback();
 				}
 			}
-		} );
+		});
 	}
 
 	@Override
 	public <T> CompletionStage<Optional<T>> find(Class<T> entityClass, Object id) {
 		return CompletableFuture.supplyAsync( () -> {
-			System.out.println( "Start find" );
 			T result = rxHibernateSession.find( entityClass, id );
-			System.out.println( "Return result: " + result );
 			return Optional.ofNullable( result );
 		} );
 	}
 
 	@Override
 	public CompletionStage<Void> persist(Object entity) {
-		return CompletableFuture.runAsync( () -> {
-			schedulePersist( entity, null );
+		return inTransaction( ( session, tx) -> {
+			rxHibernateSession.persist( entity );
 		} );
-	}
-
-	// Should be similar to firePersist
-	private void schedulePersist(Object entity, CompletionStage<?> stage) {
-		for ( PersistEventListener listener : listeners( EventType.PERSIST ) ) {
-			RxPersistEvent event = new RxPersistEvent( null, entity, rxHibernateSession, this, stage );
-			listener.onPersist( event );
-		}
 	}
 
 	private ExceptionConverter exceptionConverter() {
