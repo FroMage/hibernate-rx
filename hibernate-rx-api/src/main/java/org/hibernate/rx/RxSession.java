@@ -2,7 +2,7 @@ package org.hibernate.rx;
 
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import javax.persistence.EntityTransaction;
 
 /**
@@ -11,7 +11,7 @@ import javax.persistence.EntityTransaction;
  */
 public interface RxSession {
 
-	CompletionStage<Void> inTransaction(BiConsumer<RxSession, EntityTransaction> consumer);
+	CompletionStage<Void> inTransaction(Consumer<RxSession> consumer);
 
 	<T> CompletionStage<Optional<T>> find(Class<T> entityClass, Object id);
 

@@ -3,15 +3,12 @@ package org.hibernate.rx;
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.metamodel.model.creation.internal.PersisterClassResolverInitiator;
-import org.hibernate.rx.service.RxRuntimeModelDescriptorResolver;
 
 import org.hibernate.testing.junit5.SessionFactoryBasedFunctionalTest;
 import org.junit.jupiter.api.AfterEach;
@@ -76,12 +73,13 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 
 	@Test
 	public void testRegularFind() {
+		GuineaPig aloi = new GuineaPig( 2, "Aloi" );
 		sessionFactoryScope().inTransaction( (session) -> {
-			session.persist( new GuineaPig( 2, "Aloi" ) );
+			session.persist( aloi );
 		} );
-		sessionFactoryScope().inTransaction( (rxSession) -> {
+		sessionFactoryScope().inTransaction( (session) -> {
 			GuineaPig guineaPig = session.find( GuineaPig.class, 2 );
-			System.out.println( "Wow!" );
+			assertThat( guineaPig ).isNotNull();
 		} );
 	}
 
@@ -89,21 +87,15 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	public void testReactivePersist(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		CompletionStage<Void> persistStage = session.reactive().persist( mibbles );
+		CompletionStage<Void> persistStage = session.reactive()
+				.persist( mibbles );
+
 		persistStage.whenComplete( (pig, err) -> {
-					try {
-						assertAll(
-								() -> assertThat( pig ).isNull(),
-								() -> assertThat( err ).isNull()
-						);
-						testContext.completeNow();
-					}
-					catch (Throwable t) {
-						testContext.failNow( t );
-					}
-				} )
-		.thenRun( () -> {
-			System.out.println( "Prova" );
+			assertAsync( testContext, () ->
+					assertAll(
+							() -> assertThat( pig ).isNull(),
+							() -> assertThat( err ).isNull()
+					) );
 		} );
 	}
 
@@ -119,17 +111,16 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	public void testReactivePersitstAndThenFind(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		session.reactive().inTransaction( (reac) )
 		session.reactive().persist( mibbles ).toCompletableFuture().get();
 
 		session.reactive().find( GuineaPig.class, mibbles.getId() )
 					.whenComplete( (pig, err) ->
-						rxAssert( testContext, () -> assertAll(
+						assertAsync( testContext, () -> assertAll(
 								()-> assertThat(pig).hasValue( mibbles ),
 								()-> assertThat(err).isNull() ) ) );
 	}
 
-	private void rxAssert(VertxTestContext ctx, Runnable r) {
+	private void assertAsync(VertxTestContext ctx, Runnable r) {
 		try {
 			r.run();
 			ctx.completeNow();
