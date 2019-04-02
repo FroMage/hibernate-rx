@@ -11,7 +11,11 @@ import javax.persistence.EntityTransaction;
  */
 public interface RxSession {
 
-	CompletionStage<Void> inTransaction(Consumer<RxSession> consumer);
+	CompletionStage<ReactiveTransaction> beginTransaction();
+
+	CompletionStage<ReactiveTransaction> beginTransaction(Consumer<RxSession> consumer);
+
+	CompletionStage<ReactiveTransaction> inTransaction(Consumer<RxSession> consumer);
 
 	<T> CompletionStage<Optional<T>> find(Class<T> entityClass, Object id);
 

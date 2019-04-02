@@ -1,6 +1,9 @@
 package org.hibernate.rx.impl;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import javax.persistence.EntityTransaction;
 
 import org.hibernate.FlushMode;
 import org.hibernate.HibernateException;
@@ -30,10 +33,12 @@ import org.hibernate.rx.event.RxPersistEvent;
 
 public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements RxHibernateSession, EventSource {
 
+	private final CompletionStage<EntityTransaction> transactionStage = CompletableFuture.completedFuture( null );
 	private final RxHibernateSessionFactoryImplementor factory;
 	private final ExceptionConverter exceptionConverter;
 	private final ExceptionMapper exceptionMapper = ExceptionMapperStandardImpl.INSTANCE;
 	private transient RxActionQueue rxActionQueue;
+	private RxSessionImpl rxSession;
 
 	public RxHibernateSessionImpl(RxHibernateSessionFactoryImplementor factory, SessionImplementor delegate) {
 		super( delegate );
@@ -70,7 +75,9 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 			// influence this decision if we were not able to based on the
 			// given entityName
 			try {
-				EntityTypeDescriptor typeDescriptor = getFactory().getMetamodel().findEntityDescriptor( entityName ).getSubclassEntityDescriptor( object, getFactory() );
+				EntityTypeDescriptor typeDescriptor = getFactory().getMetamodel()
+						.findEntityDescriptor( entityName )
+						.getSubclassEntityDescriptor( object, getFactory() );
 				return typeDescriptor;
 			}
 			catch (HibernateException e) {
@@ -142,7 +149,7 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 
 //			delayedAfterCompletion();
 		}
-		catch ( RuntimeException e ) {
+		catch (RuntimeException e) {
 			throw exceptionConverter.convert( e );
 		}
 	}
@@ -152,7 +159,9 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 	}
 
 	private <T> EventListenerGroup<T> eventListenerGroup(EventType<T> type) {
-		return getFactory().getServiceRegistry().getService( EventListenerRegistry.class ).getEventListenerGroup( type );
+		return getFactory().getServiceRegistry()
+				.getService( EventListenerRegistry.class )
+				.getEventListenerGroup( type );
 	}
 
 	private void managedFlush() {
@@ -195,7 +204,10 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 
 	@Override
 	public RxSession reactive() {
-		return new RxSessionImpl( factory, this );
+		if ( rxSession == null ) {
+			rxSession = new RxSessionImpl( factory, this );
+		}
+		return rxSession;
 	}
 
 	@Override

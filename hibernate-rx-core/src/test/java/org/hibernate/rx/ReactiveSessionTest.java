@@ -2,15 +2,20 @@ package org.hibernate.rx;
 
 import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.metamodel.model.creation.internal.PersisterClassResolverInitiator;
+import org.hibernate.rx.service.RxRuntimeModelDescriptorResolver;
 
 import org.hibernate.testing.junit5.SessionFactoryBasedFunctionalTest;
+import org.junit.Ignore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +56,7 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	@Override
 	protected void applySettings(StandardServiceRegistryBuilder builer) {
 		// TODO: Move this somewhere else in the implementation
-//		builer.applySetting( PersisterClassResolverInitiator.IMPL_NAME, RxRuntimeModelDescriptorResolver.class.getName() );
+		builer.applySetting( PersisterClassResolverInitiator.IMPL_NAME, RxRuntimeModelDescriptorResolver.class.getName() );
 		builer.applySetting( AvailableSettings.DIALECT, "org.hibernate.dialect.PostgreSQL9Dialect" );
 		builer.applySetting( AvailableSettings.DRIVER, "org.postgresql.Driver" );
 		builer.applySetting( AvailableSettings.USER, "hibernate-rx" );
@@ -64,6 +69,7 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		metadataSources.addAnnotatedClass( GuineaPig.class );
 	}
 
+	@Ignore
 	@Test
 	public void testRegularPersist() {
 		sessionFactoryScope().inTransaction( (session) -> {
@@ -71,6 +77,7 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		} );
 	}
 
+	@Ignore
 	@Test
 	public void testRegularFind() {
 		GuineaPig aloi = new GuineaPig( 2, "Aloi" );
@@ -111,8 +118,29 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	public void testReactivePersitstAndThenFind(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		session.reactive().persist( mibbles ).toCompletableFuture().get();
+		Function<RxSession, CompletionStage<Void>> persistConsumer = (rxSession) -> {
+			return rxSession.persist( mibbles );
+		};
 
+		Function<ReactiveTransaction, CompletionStage<Void>> persist = tx -> {
+			return tx.runAsync( persistConsumer )
+					.thenApply( result -> {
+						return true;
+					} )
+					.thenApply( (commitable) -> {
+						tx.commit();
+						return null;
+					} );
+		};
+
+		CompletionStage<ReactiveTransaction> txStage = session.reactive().beginTransaction();
+		CompletionStage<Void> persistStage = txStage.thenCompose( persist );
+
+		persistStage
+				.toCompletableFuture()
+				.get();
+
+		session.clear();
 		session.reactive().find( GuineaPig.class, mibbles.getId() )
 					.whenComplete( (pig, err) ->
 						assertAsync( testContext, () -> assertAll(
