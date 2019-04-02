@@ -5,10 +5,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import javax.persistence.EntityTransaction;
 
-import org.hibernate.Transaction;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
@@ -16,7 +15,6 @@ import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
 import org.hibernate.rx.ReactiveTransaction;
-import org.hibernate.rx.ReactiveTransactionWork;
 import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.RxQuery;
@@ -28,39 +26,49 @@ public class RxSessionImpl implements RxSession {
 
 	// Might make sense to have a service or delegator for this
 	private Executor executor = ForkJoinPool.commonPool();
+
 	private final RxHibernateSessionFactory factory;
 	private final RxHibernateSession rxHibernateSession;
-	private CompletionStage<?> stage;
+	private CompletionStage<ReactiveTransaction> txStage;
 
-
-	public RxSessionImpl(RxHibernateSessionFactory factory, RxHibernateSession session) {
-		this( factory, session, new CompletableFuture<>() );
-	}
-
-	public <T> RxSessionImpl(RxHibernateSessionFactory factory, RxHibernateSession session, CompletionStage<T> stage) {
+	public <T> RxSessionImpl(RxHibernateSessionFactory factory, RxHibernateSession session) {
 		this.factory = factory;
 		this.rxHibernateSession = session;
-		this.stage = stage;
 	}
 
 	@Override
-	public CompletionStage<Void> inTransaction(Consumer<RxSession> consumer) {
-		return CompletableFuture.runAsync( () -> {
-			Transaction tx = rxHibernateSession.getTransaction();
-			tx.begin();
-			try {
-				consumer.accept( this );
-			}
-			// Catch exceptions
-			finally {
-				if ( tx.isActive() && !tx.getRollbackOnly() ) {
-					tx.commit();
-				}
-				else {
-					tx.rollback();
-				}
-			}
-		});
+	public CompletionStage<ReactiveTransaction> beginTransaction() {
+		txStage = initTxStage();
+		return txStage;
+	}
+
+	private void waitForABit() {
+		try {
+			Thread.sleep( 60 * 60 * 1000L );
+		}
+		catch (InterruptedException e) {
+			throw new RuntimeException( e );
+		}
+	}
+
+	private CompletionStage<ReactiveTransaction> initTxStage() {
+		return CompletableFuture.supplyAsync( () -> {
+			return new ReactiveTransactionImpl( this, rxHibernateSession.beginTransaction() );
+		} );
+	}
+
+	@Override
+	public CompletionStage<ReactiveTransaction> beginTransaction(Consumer<RxSession> consumer) {
+		throw new RuntimeException( "Remove this" );
+	}
+
+	@Override
+	public CompletionStage<ReactiveTransaction> inTransaction(Consumer<RxSession> consumer) {
+		txStage = txStage.thenApply( tx -> {
+			consumer.accept( this );
+			return tx;
+		} );
+		return txStage;
 	}
 
 	@Override
@@ -73,9 +81,11 @@ public class RxSessionImpl implements RxSession {
 
 	@Override
 	public CompletionStage<Void> persist(Object entity) {
-		return inTransaction( (session) -> {
+		CompletionStage<Void> newTx = txStage.thenApply( (tx) -> {
 			rxHibernateSession.persist( entity );
+			return null;
 		} );
+		return newTx;
 	}
 
 	private ExceptionConverter exceptionConverter() {

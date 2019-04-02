@@ -59,7 +59,8 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 
 		// for now - just root table
 		// for now - we also regenerate these SQL AST objects each time - we can cache these
-		executeInsert( fields, session, unresolvedId, executionContext, new TableReference( getPrimaryTable(), null, false), null );
+		CompletionStage<Void> stage = null;
+		executeInsert( fields, session, unresolvedId, executionContext, new TableReference( getPrimaryTable(), null, false), stage );
 
 //		getSecondaryTableBindings().forEach(
 //				tableBindings -> executeJoinTableInsert(
