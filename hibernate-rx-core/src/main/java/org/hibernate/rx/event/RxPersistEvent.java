@@ -13,20 +13,20 @@ import org.hibernate.rx.impl.RxSessionImpl;
  */
 public class RxPersistEvent extends PersistEvent {
 
-	private final CompletionStage<?> stage;
+	private final CompletionStage<Void> stage;
 
 	public RxPersistEvent(
 			String entityName,
 			Object original,
 			RxHibernateSession source,
 			RxSession rxSession,
-			CompletionStage<?> stage) {
+			CompletionStage<Void> stage) {
 		// FIXME: Should probably use unwrap here
 		super( entityName, original, (EventSource) source );
 		this.stage = stage;
 	}
 
-	public CompletionStage<?> getStage() {
+	public CompletionStage<Void> getStage() {
 		return stage;
 	}
 }

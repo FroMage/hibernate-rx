@@ -27,6 +27,7 @@ import org.hibernate.event.spi.PostInsertEvent;
 import org.hibernate.event.spi.PostInsertEventListener;
 import org.hibernate.event.spi.PreInsertEvent;
 import org.hibernate.event.spi.PreInsertEventListener;
+import org.hibernate.metamodel.model.domain.internal.entity.SingleTableEntityTypeDescriptor;
 import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
 
 /**
@@ -66,7 +67,6 @@ public final class RxEntityInsertAction extends AbstractEntityInsertAction {
 	@Override
 	protected void markExecuted() {
 		super.markExecuted();
-		stage.toCompletableFuture().complete( null );
 	}
 
 	@Override
@@ -83,7 +83,7 @@ public final class RxEntityInsertAction extends AbstractEntityInsertAction {
 	public void execute() throws HibernateException {
 		nullifyTransientReferencesIfNotAlready();
 
-		final EntityTypeDescriptor entityDescriptor = getEntityDescriptor();
+		final RxSingleTableEntityTypeDescriptor entityDescriptor = (RxSingleTableEntityTypeDescriptor) getEntityDescriptor();
 		final SharedSessionContractImplementor session = getSession();
 		final Object instance = getInstance();
 		final Object id = getId();
@@ -94,8 +94,7 @@ public final class RxEntityInsertAction extends AbstractEntityInsertAction {
 		// else inserted the same pk first, the insert would fail
 
 		if ( !veto ) {
-
-			entityDescriptor.insert( id, getState(), instance, session );
+			entityDescriptor.insert( id, getState(), instance, session, stage );
 			PersistenceContext persistenceContext = session.getPersistenceContext();
 			final EntityEntry entry = persistenceContext.getEntry( instance );
 			if ( entry == null ) {

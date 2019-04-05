@@ -22,7 +22,22 @@ public class MockRxSession implements RxSession {
 		private Consumer persistFunction = obj -> {};
 		private Consumer removeFunction = obj -> {};
 
-		/**
+		@Override
+		public CompletionStage<ReactiveTransaction> getAsyncTransaction() {
+			return null;
+		}
+
+	@Override
+	public CompletionStage<ReactiveTransaction> beginTransaction() {
+		return null;
+	}
+
+	@Override
+	public CompletionStage<ReactiveTransaction> beginTransaction(Consumer<RxSession> consumer) {
+		return null;
+	}
+
+	/**
 		 * Assign the functions that simulate the access to a source for CRUD.
 		 *
 		 * @param <T> the type of the entity
@@ -51,7 +66,7 @@ public class MockRxSession implements RxSession {
 		}
 
 	@Override
-	public CompletionStage<EntityTransaction> inTransaction(Consumer<RxSession> consumer) {
+	public <T> CompletionStage<T> inTransaction(Supplier<CompletionStage<T>> supplier) {
 		return null;
 	}
 

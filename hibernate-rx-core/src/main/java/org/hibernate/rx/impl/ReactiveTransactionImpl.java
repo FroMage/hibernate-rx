@@ -21,7 +21,7 @@ public class ReactiveTransactionImpl implements ReactiveTransaction {
 
 	@Override
 	public <T> CompletionStage<T> runAsync(Function<RxSession, CompletionStage<T> > consumer) {
-		return consumer.apply( session );
+		return null;
 	}
 
 	@Override

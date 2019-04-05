@@ -6,8 +6,9 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
-import javax.persistence.EntityTransaction;
+import java.util.function.Supplier;
 
+import org.hibernate.Transaction;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
@@ -37,6 +38,11 @@ public class RxSessionImpl implements RxSession {
 	}
 
 	@Override
+	public CompletionStage<ReactiveTransaction> getAsyncTransaction() {
+		return txStage;
+	}
+
+	@Override
 	public CompletionStage<ReactiveTransaction> beginTransaction() {
 		txStage = initTxStage();
 		return txStage;
@@ -63,12 +69,8 @@ public class RxSessionImpl implements RxSession {
 	}
 
 	@Override
-	public CompletionStage<ReactiveTransaction> inTransaction(Consumer<RxSession> consumer) {
-		txStage = txStage.thenApply( tx -> {
-			consumer.accept( this );
-			return tx;
-		} );
-		return txStage;
+	public <T> CompletionStage<T> inTransaction(Supplier<CompletionStage<T>> supplier) {
+		return null;
 	}
 
 	@Override
@@ -81,11 +83,7 @@ public class RxSessionImpl implements RxSession {
 
 	@Override
 	public CompletionStage<Void> persist(Object entity) {
-		CompletionStage<Void> newTx = txStage.thenApply( (tx) -> {
-			rxHibernateSession.persist( entity );
-			return null;
-		} );
-		return newTx;
+		return rxHibernateSession.persistAsync( entity );
 	}
 
 	private ExceptionConverter exceptionConverter() {
