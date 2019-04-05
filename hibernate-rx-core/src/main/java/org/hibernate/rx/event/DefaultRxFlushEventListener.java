@@ -1,17 +1,18 @@
 package org.hibernate.rx.event;
 
 import org.hibernate.HibernateException;
-import org.hibernate.event.internal.AbstractFlushingEventListener;
 import org.hibernate.event.internal.DefaultFlushEventListener;
+import org.hibernate.event.service.spi.DuplicationStrategy;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.FlushEvent;
+import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.rx.RxHibernateSession;
 
 import org.jboss.logging.Logger;
 
-public class RxFlushEventListener extends DefaultFlushEventListener {
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, RxFlushEventListener.class.getName() );
+public class DefaultRxFlushEventListener extends DefaultFlushEventListener {
+	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, DefaultRxFlushEventListener.class.getName() );
 
 	@Override
 	public void onFlush(FlushEvent event) throws HibernateException {
@@ -39,4 +40,25 @@ public class RxFlushEventListener extends DefaultFlushEventListener {
 		}
 	}
 
+	public static class EventContextManagingFlushEventListenerDuplicationStrategy implements DuplicationStrategy {
+
+		public static final DuplicationStrategy INSTANCE = new DefaultRxFlushEventListener.EventContextManagingFlushEventListenerDuplicationStrategy();
+
+		private EventContextManagingFlushEventListenerDuplicationStrategy() {
+		}
+
+		@Override
+		public boolean areMatch(Object listener, Object original) {
+			if ( listener instanceof DefaultRxFlushEventListener && original instanceof FlushEventListener ) {
+				return true;
+			}
+
+			return false;
+		}
+
+		@Override
+		public Action getAction() {
+			return Action.REPLACE_ORIGINAL;
+		}
+	}
 }

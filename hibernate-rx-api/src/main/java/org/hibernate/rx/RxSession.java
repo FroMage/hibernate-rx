@@ -3,6 +3,8 @@ package org.hibernate.rx;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import javax.persistence.EntityTransaction;
 
 /**
@@ -11,11 +13,13 @@ import javax.persistence.EntityTransaction;
  */
 public interface RxSession {
 
+	CompletionStage<ReactiveTransaction> getAsyncTransaction();
+
 	CompletionStage<ReactiveTransaction> beginTransaction();
 
 	CompletionStage<ReactiveTransaction> beginTransaction(Consumer<RxSession> consumer);
 
-	CompletionStage<ReactiveTransaction> inTransaction(Consumer<RxSession> consumer);
+	<T> CompletionStage<T> inTransaction(Supplier<CompletionStage<T>> supplier);
 
 	<T> CompletionStage<Optional<T>> find(Class<T> entityClass, Object id);
 

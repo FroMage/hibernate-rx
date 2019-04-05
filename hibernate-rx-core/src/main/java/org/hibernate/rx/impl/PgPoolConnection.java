@@ -25,28 +25,6 @@ public class PgPoolConnection implements RxConnection {
 	}
 
 	@Override
-	public CompletionStage<Void> inTransaction(
-			Consumer<RxSession> consumer,
-			RxSession delegate) {
-		return CompletableFuture.runAsync( () -> {
-			pool.getConnection( res -> {
-				if (res.succeeded()) {
-					// Transaction must use a connection
-					PgConnection conn = res.result();
-
-					// Begin the transaction
-					PgTransaction tx = conn.begin();
-
-					// Commit the transaction
-					tx.commit(ar -> {
-						consumer.accept( delegate );
-					});
-				}
-			});
-		} );
-	}
-
-	@Override
 	public boolean isUnwrappableAs(Class unwrapType) {
 		return PgPool.class.isAssignableFrom( unwrapType );
 	}

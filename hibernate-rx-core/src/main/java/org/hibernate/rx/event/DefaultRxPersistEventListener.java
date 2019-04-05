@@ -73,7 +73,7 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
 
 		RxPersistEvent rxPersistEvent = (RxPersistEvent) event;
-		CompletionStage<?> stage = rxPersistEvent.getStage();
+		CompletionStage<Void> stage = rxPersistEvent.getStage();
 		if ( createCache.put( entity, entity ) == null ) {
 			saveWithGeneratedId( entity, event.getEntityName(), createCache, source, false, stage );
 		}
@@ -310,7 +310,8 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 			EntityTypeDescriptor descriptor,
 			boolean useIdentityColumn,
 			EventSource source,
-			boolean shouldDelayIdentityInserts, CompletionStage stage) {
+			boolean shouldDelayIdentityInserts,
+			CompletionStage<?> stage) {
 //		AbstractEntityInsertAction insertAction = null;
 //		if ( useIdentityColumn ) {
 //			insertAction = new RxEntityIdentityInsertAction(

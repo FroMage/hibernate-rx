@@ -3,8 +3,6 @@ package org.hibernate.rx.impl;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
-import javax.persistence.EntityTransaction;
 
 import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxSession;
@@ -17,39 +15,38 @@ import io.reactiverse.pgclient.PgConnection;
 import io.reactiverse.pgclient.PgPool;
 import io.reactiverse.pgclient.PgPreparedQuery;
 import io.reactiverse.pgclient.PgRowSet;
+import io.reactiverse.pgclient.PgTransaction;
 
 public class RxMutationExecutor {
 
-	public CompletionStage<?> execute(RxMutation operation, ExecutionContext executionContext, CompletionStage<?> stage) {
-		final CompletionStage<Object> resultStage = new CompletableFuture<>();
-		RxHibernateSession rxHibernateSession = (RxHibernateSession) executionContext.getSession();
+	public void execute(RxMutation operation, ExecutionContext executionContext, CompletionStage<?> operationStage) {
+//		Just the insert for now
+		final RxHibernateSession rxHibernateSession = (RxHibernateSession) executionContext.getSession();
 		RxSession rxSession = rxHibernateSession.reactive();
-		Consumer<RxSession> consumer = (RxSession) -> {
-			RxConnectionPoolProvider poolProvider = reactivePoolProvider( executionContext );
-
-			RxConnection connection = poolProvider.getConnection();
-			connection.unwrap( PgPool.class ).getConnection( ar1 -> {
+		RxConnectionPoolProvider poolProvider = reactivePoolProvider( executionContext );
+		RxConnection connection = poolProvider.getConnection();
+		connection.unwrap( PgPool.class ).getConnection( ar1 -> {
+			if ( ar1.succeeded() ) {
 				PgConnection pgConnection = ar1.result();
-				pgConnection.prepare( operation.getSql(), (ar2) -> {
-					if ( ar2.succeeded() ) {
-						PgPreparedQuery preparedQuery = ar2.result();
-						// TODO: Set parameters
-						preparedQuery.execute( (queryResult) -> {
-							try {
-								final PgRowSet rowSet = queryResult.result();
-								resultStage.toCompletableFuture().complete( rowSet );
+				pgConnection.preparedQuery(
+						"insert into ReactiveSessionTest$GuineaPig (id, name) values ( 22, 'Mibbles')",
+						ar2 -> {
+							pgConnection.close();
+							if ( ar2.succeeded() ) {
+								final Object rowSet = ar2.result();
+								operationStage.toCompletableFuture().complete( null );
 							}
-							finally {
-								pgConnection.close();
+							else {
+								operationStage.toCompletableFuture().completeExceptionally( ar2.cause() );
 							}
-						} );
-					}
-				} );
-				pgConnection.
-			} );
-		};
-		rxHibernateSession.reactive().inTransaction( consumer );
-		return null;
+						}
+				);
+			}
+			else {
+				operationStage.toCompletableFuture().completeExceptionally( ar1.cause() );
+			}
+		} );
+
 	}
 
 	private RxConnectionPoolProvider reactivePoolProvider(ExecutionContext executionContext) {

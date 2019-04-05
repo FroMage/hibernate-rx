@@ -32,10 +32,10 @@ public class RxConnectionPoolProviderImpl implements RxConnectionPoolProvider, C
 	public void configure(Map configurationValues) {
 		final String username = (String) configurationValues.get( AvailableSettings.USER );
 		final String password = (String) configurationValues.get( AvailableSettings.PASS );
-		final String database = (String) configurationValues.get( AvailableSettings.DATASOURCE );
 		final String url = (String) configurationValues.get( AvailableSettings.URL );
 		final URI uri = JdbcUrlParser.parse( url );
 		final Integer poolSize = poolSize( configurationValues );
+		final String database = uri.getPath().substring( 1 ); // Ex. /hibernate-rx
 
 		options = new PgPoolOptions()
 				.setPort( uri.getPort() )

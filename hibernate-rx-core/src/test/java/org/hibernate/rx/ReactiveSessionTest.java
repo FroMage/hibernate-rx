@@ -8,6 +8,7 @@ import java.util.function.Function;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
+import org.hibernate.Transaction;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
@@ -77,14 +78,15 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		} );
 	}
 
-	@Ignore
 	@Test
+	@Ignore
 	public void testRegularFind() {
 		GuineaPig aloi = new GuineaPig( 2, "Aloi" );
-		sessionFactoryScope().inTransaction( (session) -> {
+		sessionFactoryScope().inTransaction( session -> {
 			session.persist( aloi );
 		} );
-		sessionFactoryScope().inTransaction( (session) -> {
+		sessionFactoryScope().inTransaction( session -> {
+			session.clear();
 			GuineaPig guineaPig = session.find( GuineaPig.class, 2 );
 			assertThat( guineaPig ).isNotNull();
 		} );
@@ -94,23 +96,14 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	public void testReactivePersist(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		CompletionStage<Void> persistStage = session.reactive()
-				.persist( mibbles );
+		CompletionStage<Void> persistStage = session.reactive().persist( mibbles );
 
-		persistStage.whenComplete( (pig, err) -> {
+		persistStage.whenComplete( (nothing, err) -> {
 			assertAsync( testContext, () ->
 					assertAll(
-							() -> assertThat( pig ).isNull(),
+							() -> assertThat( nothing ).isNull(),
 							() -> assertThat( err ).isNull()
 					) );
-		} );
-	}
-
-	private void assertNoError(VertxTestContext testContext, CompletionStage<?> stage) {
-		stage.whenComplete( (res, err) -> {
-			if (err != null) {
-				testContext.failNow( err );
-			}
 		} );
 	}
 
@@ -118,27 +111,20 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	public void testReactivePersitstAndThenFind(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		Function<RxSession, CompletionStage<Void>> persistConsumer = (rxSession) -> {
-			return rxSession.persist( mibbles );
-		};
+		CompletionStage<Void> persistStage = session.reactive().persist( mibbles );
 
-		Function<ReactiveTransaction, CompletionStage<Void>> persist = tx -> {
-			return tx.runAsync( persistConsumer )
-					.thenApply( result -> {
-						return true;
-					} )
-					.thenApply( (commitable) -> {
-						tx.commit();
-						return null;
-					} );
-		};
+		persistStage.whenComplete( (nothing, err) -> {
+			session.reactive().find( GuineaPig.class, mibbles.getId() )
+					.whenComplete( (pig, err) ->
+										   assertAsync( testContext, () -> assertAll(
+												   ()-> assertThat(pig).hasValue( mibbles ),
+												   ()-> assertThat(err).isNull() ) ) );
+		} );
 
 		CompletionStage<ReactiveTransaction> txStage = session.reactive().beginTransaction();
 		CompletionStage<Void> persistStage = txStage.thenCompose( persist );
 
-		persistStage
-				.toCompletableFuture()
-				.get();
+		persistStage.toCompletableFuture().get();
 
 		session.clear();
 		session.reactive().find( GuineaPig.class, mibbles.getId() )

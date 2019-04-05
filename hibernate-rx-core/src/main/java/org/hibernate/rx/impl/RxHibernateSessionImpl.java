@@ -97,9 +97,14 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 	}
 
 	@Override
-	public void persist(Object object) {
-		checkOpen();
-		firePersist( new RxPersistEvent( null, object, this, this.reactive(), null ) );
+	public CompletionStage<Void> persistAsync(Object object) {
+		final CompletableFuture<Void> persistStage = new CompletableFuture<>();
+		CompletableFuture.runAsync( () -> {
+			checkOpen();
+			firePersist( new RxPersistEvent( null, object, this, this.reactive(), persistStage ) );
+			flush();
+		} );
+		return persistStage;
 	}
 
 	private void firePersist(PersistEvent event) {
