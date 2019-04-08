@@ -51,4 +51,9 @@ public class RxLiteralParameter implements GenericParameter, RxParameterBinder {
 		delegate.getExpressableType();
 		return 1;
 	}
+
+	@Override
+	public Object getBindValue() {
+		return delegate.getBindValue();
+	}
 }

@@ -2,9 +2,8 @@ package org.hibernate.rx.engine.spi;
 
 import org.hibernate.HibernateException;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.rx.RxHibernateSession;
-import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.RxSession;
+import org.hibernate.rx.RxHibernateSessionFactory;
 
 public interface RxHibernateSessionFactoryImplementor extends RxHibernateSessionFactory, SessionFactoryImplementor {
 
@@ -12,5 +11,5 @@ public interface RxHibernateSessionFactoryImplementor extends RxHibernateSession
 	RxHibernateSessionBuilderImplementor withOptions();
 
 	@Override
-	RxHibernateSession openRxSession() throws HibernateException;
+	RxSession openRxSession() throws HibernateException;
 }

@@ -1,14 +1,13 @@
 package org.hibernate.rx;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.persistence.Table;
 
-import org.hibernate.Transaction;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
@@ -16,7 +15,6 @@ import org.hibernate.metamodel.model.creation.internal.PersisterClassResolverIni
 import org.hibernate.rx.service.RxRuntimeModelDescriptorResolver;
 
 import org.hibernate.testing.junit5.SessionFactoryBasedFunctionalTest;
-import org.junit.Ignore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,11 +27,11 @@ import io.vertx.junit5.VertxTestContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
-@Timeout( 60_000 ) // 1 H, I need to debug
+@Timeout(60_000) // 1 H, I need to debug
 @ExtendWith(VertxExtension.class)
 public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 
-	RxHibernateSession session = null;
+	RxSession session = null;
 
 	@BeforeEach
 	public void setupSession() {
@@ -57,7 +55,10 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	@Override
 	protected void applySettings(StandardServiceRegistryBuilder builer) {
 		// TODO: Move this somewhere else in the implementation
-		builer.applySetting( PersisterClassResolverInitiator.IMPL_NAME, RxRuntimeModelDescriptorResolver.class.getName() );
+		builer.applySetting(
+				PersisterClassResolverInitiator.IMPL_NAME,
+				RxRuntimeModelDescriptorResolver.class.getName()
+		);
 		builer.applySetting( AvailableSettings.DIALECT, "org.hibernate.dialect.PostgreSQL9Dialect" );
 		builer.applySetting( AvailableSettings.DRIVER, "org.postgresql.Driver" );
 		builer.applySetting( AvailableSettings.USER, "hibernate-rx" );
@@ -70,33 +71,11 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		metadataSources.addAnnotatedClass( GuineaPig.class );
 	}
 
-	@Ignore
-	@Test
-	public void testRegularPersist() {
-		sessionFactoryScope().inTransaction( (session) -> {
-			session.persist( new GuineaPig( 2, "Aloi" ) );
-		} );
-	}
-
-	@Test
-	@Ignore
-	public void testRegularFind() {
-		GuineaPig aloi = new GuineaPig( 2, "Aloi" );
-		sessionFactoryScope().inTransaction( session -> {
-			session.persist( aloi );
-		} );
-		sessionFactoryScope().inTransaction( session -> {
-			session.clear();
-			GuineaPig guineaPig = session.find( GuineaPig.class, 2 );
-			assertThat( guineaPig ).isNotNull();
-		} );
-	}
-
 	@Test
 	public void testReactivePersist(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		CompletionStage<Void> persistStage = session.reactive().persist( mibbles );
+		CompletionStage<Void> persistStage = session.persistAsync( mibbles );
 
 		persistStage.whenComplete( (nothing, err) -> {
 			assertAsync( testContext, () ->
@@ -108,30 +87,49 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	}
 
 	@Test
+	public void testFindWithNull(VertxTestContext testContext) throws Exception {
+		session.findAsync( GuineaPig.class, 22 ).whenComplete( (result, err) -> {
+			assertAsync( testContext, () ->
+					assertAll(
+							() -> assertThat( result ).isNotPresent(),
+							() -> assertThat( err ).isNull()
+					) );
+		} );
+	}
+
+	@Test
+	public void testRemove(VertxTestContext testContext) throws Exception {
+		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
+
+		CompletionStage<Void> persistStage = session.persistAsync( mibbles );
+
+		persistStage.whenComplete( (nothing, err1) -> {
+			session.removeAsync( mibbles ).whenComplete( (ignore, err) -> {
+				assertAsync( testContext, () ->
+						assertAll(
+								() -> assertThat( ignore ).isNull(),
+								() -> assertThat( err ).isNull()
+						) );
+			} ).thenAccept( (ignore)-> {
+			} );
+
+		} );
+	}
+
+	@Test
 	public void testReactivePersitstAndThenFind(VertxTestContext testContext) throws Exception {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
-		CompletionStage<Void> persistStage = session.reactive().persist( mibbles );
+		CompletionStage<Void> persistStage = session.persistAsync( mibbles );
 
-		persistStage.whenComplete( (nothing, err) -> {
-			session.reactive().find( GuineaPig.class, mibbles.getId() )
+		persistStage.thenAccept( ignore -> {
+			session.findAsync( GuineaPig.class, mibbles.getId() )
 					.whenComplete( (pig, err) ->
 										   assertAsync( testContext, () -> assertAll(
-												   ()-> assertThat(pig).hasValue( mibbles ),
-												   ()-> assertThat(err).isNull() ) ) );
+												   () -> assertThat( pig ).hasValue( mibbles ),
+												   () -> assertThat( err ).isNull()
+										   ) ) );
 		} );
-
-		CompletionStage<ReactiveTransaction> txStage = session.reactive().beginTransaction();
-		CompletionStage<Void> persistStage = txStage.thenCompose( persist );
-
-		persistStage.toCompletableFuture().get();
-
-		session.clear();
-		session.reactive().find( GuineaPig.class, mibbles.getId() )
-					.whenComplete( (pig, err) ->
-						assertAsync( testContext, () -> assertAll(
-								()-> assertThat(pig).hasValue( mibbles ),
-								()-> assertThat(err).isNull() ) ) );
 	}
 
 	private void assertAsync(VertxTestContext ctx, Runnable r) {
@@ -139,12 +137,13 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 			r.run();
 			ctx.completeNow();
 		}
-		catch ( Throwable t) {
+		catch (Throwable t) {
 			ctx.failNow( t );
 		}
 	}
 
-	@Entity
+	@Entity(name = "GuineaPig")
+	@Table(name = "GuineaPig")
 	public static class GuineaPig {
 		@Id
 		private Integer id;

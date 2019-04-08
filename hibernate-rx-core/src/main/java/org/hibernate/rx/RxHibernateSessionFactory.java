@@ -6,13 +6,13 @@ import org.hibernate.rx.engine.spi.RxHibernateSessionBuilderImplementor;
 
 public interface RxHibernateSessionFactory extends SessionFactory {
 
-	RxHibernateSession openRxSession();
+	RxSession openRxSession();
 
 	@Override
 	RxHibernateSessionBuilderImplementor withOptions();
 
 	interface RxHibernateSessionBuilder<T extends RxHibernateSessionBuilder> extends SessionBuilder<T> {
 
-		RxHibernateSession openRxSession();
+		RxSession openRxSession();
 	}
 }

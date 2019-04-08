@@ -1,34 +1,36 @@
 package org.hibernate.rx.impl;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 import org.hibernate.HibernateException;
-import org.hibernate.NotYetImplementedFor6Exception;
 import org.hibernate.boot.model.domain.EntityMapping;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
-import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.loader.internal.TemplateParameterBindingContext;
 import org.hibernate.loader.spi.SingleIdEntityLoader;
 import org.hibernate.metamodel.model.creation.spi.RuntimeModelCreationContext;
 import org.hibernate.metamodel.model.domain.internal.entity.SingleTableEntityTypeDescriptor;
-import org.hibernate.metamodel.model.domain.spi.DiscriminatorDescriptor;
 import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
 import org.hibernate.metamodel.model.domain.spi.IdentifiableTypeDescriptor;
-import org.hibernate.metamodel.model.domain.spi.TenantDiscrimination;
 import org.hibernate.metamodel.model.relational.spi.Column;
-import org.hibernate.metamodel.model.relational.spi.JoinedTableBinding;
 import org.hibernate.query.internal.QueryOptionsImpl;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.rx.sql.exec.spi.RxMutation;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.Clause;
+import org.hibernate.sql.ast.consume.spi.SqlDeleteToJdbcDeleteConverter;
+import org.hibernate.sql.ast.produce.spi.SqlAstDeleteDescriptor;
 import org.hibernate.sql.ast.produce.sqm.spi.Callback;
+import org.hibernate.sql.ast.tree.spi.DeleteStatement;
 import org.hibernate.sql.ast.tree.spi.InsertStatement;
 import org.hibernate.sql.ast.tree.spi.expression.ColumnReference;
 import org.hibernate.sql.ast.tree.spi.expression.LiteralParameter;
 import org.hibernate.sql.ast.tree.spi.from.TableReference;
+import org.hibernate.sql.ast.tree.spi.predicate.Junction;
+import org.hibernate.sql.ast.tree.spi.predicate.RelationalPredicate;
 import org.hibernate.sql.exec.spi.ExecutionContext;
+import org.hibernate.sql.exec.spi.JdbcMutation;
 import org.hibernate.sql.exec.spi.ParameterBindingContext;
 
 public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeDescriptor<T> implements
@@ -45,6 +47,85 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 	@Override
 	public SingleIdEntityLoader getSingleIdLoader() {
 		return super.getSingleIdLoader();
+	}
+
+	public void delete(
+			Object id,
+			Object version,
+			Object object,
+			SharedSessionContractImplementor session,
+			CompletionStage<Void> stage)
+			throws HibernateException {
+
+		// todo (6.0) - initial basic pass at entity deletes
+
+		final Object unresolvedId = getHierarchy().getIdentifierDescriptor().unresolve( id, session );
+		final ExecutionContext executionContext = getExecutionContext( session );
+
+
+//		deleteSecondaryTables( session, unresolvedId, executionContext );
+
+		deleteRootTable( session, unresolvedId, executionContext, stage );
+	}
+
+
+	private void deleteRootTable(
+			SharedSessionContractImplementor session,
+			Object unresolvedId,
+			ExecutionContext executionContext,
+			CompletionStage<Void> deleteStage) {
+		final TableReference tableReference = new TableReference( getPrimaryTable(), null, false );
+
+		final Junction identifierJunction = new Junction( Junction.Nature.CONJUNCTION );
+		getHierarchy().getIdentifierDescriptor().dehydrate(
+				unresolvedId,
+				(jdbcValue, type, boundColumn) ->
+						identifierJunction.add(
+								new RelationalPredicate(
+										RelationalPredicate.Operator.EQUAL,
+										new ColumnReference( boundColumn ),
+										new LiteralParameter(
+												jdbcValue,
+												boundColumn.getExpressableType(),
+												Clause.DELETE,
+												session.getFactory().getTypeConfiguration()
+										)
+								)
+						)
+				,
+				Clause.DELETE,
+				session
+		);
+
+		executeDelete( executionContext, tableReference, identifierJunction, deleteStage );
+	}
+
+
+	private void executeDelete(
+			ExecutionContext executionContext,
+			TableReference tableReference,
+			Junction identifierJunction,
+			CompletionStage<Void> deleteStage) {
+		final DeleteStatement deleteStatement = new DeleteStatement( tableReference, identifierJunction );
+
+		final JdbcMutation delete = SqlDeleteToJdbcDeleteConverter.interpret(
+				new SqlAstDeleteDescriptor() {
+					@Override
+					public DeleteStatement getSqlAstStatement() {
+						return deleteStatement;
+					}
+
+					@Override
+					public Set<String> getAffectedTableNames() {
+						return Collections.singleton(
+								deleteStatement.getTargetTable().getTable().getTableExpression()
+						);
+					}
+				},
+				executionContext.getSession().getSessionFactory()
+		);
+
+		executeOperation( executionContext, deleteStatement, deleteStage );
 	}
 
 	public void insert(
@@ -177,6 +258,13 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 
 	private void executeOperation(ExecutionContext executionContext, InsertStatement insertStatement, CompletionStage<?> operationStage) {
 		RxMutation mutation = InsertToRxInsertConverter.createRxInsert( insertStatement, executionContext.getSession().getSessionFactory() );
+		RxMutationExecutor executor = new RxMutationExecutor();
+		executor.execute( mutation, executionContext, operationStage );
+	}
+
+
+	private void executeOperation(ExecutionContext executionContext, DeleteStatement deleteStatement, CompletionStage<?> operationStage) {
+		RxMutation mutation = DeleteToRxDeleteConverter.createRxDelete( deleteStatement, executionContext.getSession().getSessionFactory() );
 		RxMutationExecutor executor = new RxMutationExecutor();
 		executor.execute( mutation, executionContext, operationStage );
 	}

@@ -27,4 +27,6 @@ public interface RxParameterBinder {
 			PgPreparedQuery statement,
 			int startPosition,
 			ExecutionContext executionContext); // throws SQLException;
+
+	Object getBindValue();
 }

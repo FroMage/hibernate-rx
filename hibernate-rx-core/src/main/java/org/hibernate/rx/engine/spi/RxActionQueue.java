@@ -52,6 +52,7 @@ import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.proxy.LazyInitializer;
+import org.hibernate.rx.impl.RxEntityDeleteAction;
 import org.hibernate.rx.impl.RxEntityInsertAction;
 import org.hibernate.type.Type;
 

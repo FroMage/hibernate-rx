@@ -1,7 +1,7 @@
 package org.hibernate.rx.impl;
 
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -10,24 +10,25 @@ import org.hibernate.metamodel.model.relational.spi.PhysicalTable;
 import org.hibernate.rx.sql.exec.spi.RxMutation;
 import org.hibernate.rx.sql.exec.spi.RxParameterBinder;
 import org.hibernate.sql.ast.consume.spi.AbstractSqlAstToJdbcOperationConverter;
-import org.hibernate.sql.ast.consume.spi.InsertToJdbcInsertConverter;
 import org.hibernate.sql.ast.consume.spi.SqlMutationToJdbcMutationConverter;
-import org.hibernate.sql.ast.tree.spi.InsertStatement;
-import org.hibernate.sql.ast.tree.spi.expression.ColumnReference;
-import org.hibernate.sql.ast.tree.spi.expression.Expression;
+import org.hibernate.sql.ast.tree.spi.DeleteStatement;
 import org.hibernate.sql.ast.tree.spi.expression.GenericParameter;
 import org.hibernate.sql.exec.spi.ExecutionContext;
-import org.hibernate.sql.exec.spi.JdbcInsert;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.sql.exec.spi.JdbcParameterBinding;
 
 import io.reactiverse.pgclient.PgPreparedQuery;
 
 // TODO: Create a Rx interface instead of a JDBC one
-public class InsertToRxInsertConverter extends AbstractSqlAstToJdbcOperationConverter
+public class DeleteToRxDeleteConverter extends AbstractSqlAstToJdbcOperationConverter
 		implements SqlMutationToJdbcMutationConverter {
-	protected InsertToRxInsertConverter(SessionFactoryImplementor sessionFactory) {
+	private final Set<String> affectedTableNames;
+
+	protected DeleteToRxDeleteConverter(SessionFactoryImplementor sessionFactory, DeleteStatement statement) {
 		super( sessionFactory );
+		this.affectedTableNames = Collections.singleton(
+				statement.getTargetTable().getTable().getTableExpression()
+		);
 	}
 
 	private final List<RxParameterBinder> rxParameterBinders = new ArrayList<>( 0 );
@@ -66,9 +67,9 @@ public class InsertToRxInsertConverter extends AbstractSqlAstToJdbcOperationConv
 		return rxParameterBinders;
 	}
 
-	public static RxMutation createRxInsert(InsertStatement sqlAst, SessionFactoryImplementor sessionFactory) {
-		final InsertToRxInsertConverter walker = new InsertToRxInsertConverter( sessionFactory );
-		walker.processStatement( sqlAst );
+	public static RxMutation createRxDelete(DeleteStatement statement, SessionFactoryImplementor sessionFactory) {
+		final DeleteToRxDeleteConverter walker = new DeleteToRxDeleteConverter( sessionFactory, statement );
+		walker.processDeleteStatement( statement );
 		// TODO: Create specific class for insert? Ex: InsertRxMutation
 		return new RxMutation() {
 			@Override
@@ -86,68 +87,33 @@ public class InsertToRxInsertConverter extends AbstractSqlAstToJdbcOperationConv
 				return walker.getAffectedTableNames();
 			}
 		};
-		/*return new JdbcInsert() {
-			public boolean isKeyGenerationEnabled() {
-				return false;
-			}
-
-			public String getSql() {
-				return walker.getSql();
-			}
-
-			public List<JdbcParameterBinder> getParameterBinders() {
-				return walker.getParameterBinders();
-			}
-
-			public Set<String> getAffectedTableNames() {
-				return walker.getAffectedTableNames();
-			}
-		};*/
 	}
 
+	@Override
+	public Set<String> getAffectedTableNames() {
+		return affectedTableNames;
+	}
 
-	private void processStatement(InsertStatement sqlAst) {
-		this.appendSql( "insert into " );
-		PhysicalTable targetTable = (PhysicalTable) sqlAst.getTargetTable().getTable();
-		String tableName = this.getSessionFactory()
-				.getJdbcServices()
+	/**
+	 * See org.hibernate.sql.ast.consume.spi.SqlDeleteToJdbcDeleteConverter
+ 	 */
+	private void processDeleteStatement(DeleteStatement deleteStatement) {
+		appendSql( "delete from " );
+
+		final PhysicalTable targetTable = (PhysicalTable) deleteStatement.getTargetTable().getTable();
+		final String tableName = getSessionFactory().getJdbcServices()
 				.getJdbcEnvironment()
 				.getQualifiedObjectNameFormatter()
 				.format(
 						targetTable.getQualifiedTableName(),
-						this.getSessionFactory().getJdbcServices().getJdbcEnvironment().getDialect()
+						getSessionFactory().getJdbcServices().getJdbcEnvironment().getDialect()
 				);
-		this.appendSql( tableName );
-		this.appendSql( " (" );
-		boolean firstPass = true;
 
-		Iterator var5;
-		ColumnReference columnReference;
-		for ( var5 = sqlAst.getTargetColumnReferences().iterator(); var5.hasNext(); this.visitColumnReference(
-				columnReference ) ) {
-			columnReference = (ColumnReference) var5.next();
-			if ( firstPass ) {
-				firstPass = false;
-			}
-			else {
-				this.appendSql( ", " );
-			}
+		appendSql( tableName );
+
+		if ( deleteStatement.getRestriction() != null ) {
+			appendSql( " where " );
+			deleteStatement.getRestriction().accept( this );
 		}
-
-		this.appendSql( ") values (" );
-		firstPass = true;
-
-		Expression expression;
-		for ( var5 = sqlAst.getValues().iterator(); var5.hasNext(); expression.accept( this ) ) {
-			expression = (Expression) var5.next();
-			if ( firstPass ) {
-				firstPass = false;
-			}
-			else {
-				this.appendSql( ", " );
-			}
-		}
-
-		this.appendSql( ")" );
 	}
 }

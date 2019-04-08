@@ -12,21 +12,17 @@ import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.engine.jndi.spi.JndiService;
-import org.hibernate.engine.spi.SessionBuilderImplementor;
 import org.hibernate.engine.spi.SessionFactoryDelegatingImpl;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.event.spi.EventSource;
 import org.hibernate.internal.SessionFactoryImpl;
 import org.hibernate.internal.SessionFactoryRegistry;
 import org.hibernate.internal.SessionFactoryRegistry.ObjectFactoryImpl;
-import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxSession;
 import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.engine.spi.RxHibernateSessionBuilderImplementor;
 import org.hibernate.rx.engine.spi.RxHibernateSessionFactoryImplementor;
 import org.hibernate.rx.impl.RxHibernateSessionBuilderDelegator;
-import org.hibernate.rx.impl.RxHibernateSessionImpl;
 import org.hibernate.rx.impl.RxSessionImpl;
 
 public class RxHibernateSessionFactoryImpl extends SessionFactoryDelegatingImpl implements RxHibernateSessionFactoryImplementor {
@@ -51,8 +47,8 @@ public class RxHibernateSessionFactoryImpl extends SessionFactoryDelegatingImpl 
 	}
 
 	@Override
-	public RxHibernateSession openRxSession() throws HibernateException {
-		return new RxHibernateSessionImpl( this, (SessionImplementor) openSession() );
+	public RxSession openRxSession() throws HibernateException {
+		return new RxSessionImpl( this, (SessionImplementor) openSession() );
 	}
 
 	@Override

@@ -7,7 +7,6 @@ import org.hibernate.FlushMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.NonUniqueObjectException;
-import org.hibernate.action.internal.AbstractEntityInsertAction;
 import org.hibernate.action.internal.EntityIdentityInsertAction;
 import org.hibernate.engine.internal.Versioning;
 import org.hibernate.engine.spi.EntityEntry;
@@ -29,7 +28,7 @@ import org.hibernate.metamodel.model.domain.spi.EntityIdentifier;
 import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
 import org.hibernate.metamodel.model.domain.spi.StateArrayContributor;
 import org.hibernate.pretty.MessageHelper;
-import org.hibernate.rx.RxHibernateSession;
+import org.hibernate.rx.RxSession;
 import org.hibernate.rx.impl.RxEntityInsertAction;
 import org.hibernate.type.internal.TypeHelper;
 
@@ -223,34 +222,45 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 				StateArrayContributor::isUpdatable
 		);
 
-		AbstractEntityInsertAction insert = addInsertAction(
-				values, id, entity, entityDescriptor, useIdentityColumn, source, shouldDelayIdentityInserts, stage
+		CompletionStage<?> postInsertStage = stage.thenAccept( (ignore) -> {
+
+			//			// postpone initializing id in case the insert has non-nullable transient dependencies
+//			// that are not resolved until cascadeAfterSave() is executed
+//			cascadeAfterSave( source, entityDescriptor, entity, anything );
+//			if ( useIdentityColumn && insert.isEarlyInsert() ) {
+//				if ( !EntityIdentityInsertAction.class.isInstance( insert ) ) {
+//					throw new IllegalStateException(
+//							"Insert should be using an identity column, but action is of unexpected type: " +
+//									insert.getClass().getName()
+//					);
+//				}
+//				id = ( (EntityIdentityInsertAction) insert ).getGeneratedId();
+//
+//				insert.handleNaturalIdPostSaveNotifications( id );
+//			}
+
+			EntityEntry newEntry = source.getPersistenceContext().getEntry( entity );
+
+			if ( newEntry != original ) {
+				EntityEntryExtraState extraState = newEntry.getExtraState( EntityEntryExtraState.class );
+				if ( extraState == null ) {
+					newEntry.addExtraState( original.getExtraState( EntityEntryExtraState.class ) );
+				}
+			}
+		} );
+
+		RxEntityInsertAction insert = createInsertAction(
+				values,
+				id,
+				entity,
+				entityDescriptor,
+				useIdentityColumn,
+				source,
+				shouldDelayIdentityInserts,
+				stage
 		);
 
-		// postpone initializing id in case the insert has non-nullable transient dependencies
-		// that are not resolved until cascadeAfterSave() is executed
-		cascadeAfterSave( source, entityDescriptor, entity, anything );
-		if ( useIdentityColumn && insert.isEarlyInsert() ) {
-			if ( !EntityIdentityInsertAction.class.isInstance( insert ) ) {
-				throw new IllegalStateException(
-						"Insert should be using an identity column, but action is of unexpected type: " +
-								insert.getClass().getName()
-				);
-			}
-			id = ((EntityIdentityInsertAction) insert).getGeneratedId();
-
-			insert.handleNaturalIdPostSaveNotifications( id );
-		}
-
-		EntityEntry newEntry = source.getPersistenceContext().getEntry( entity );
-
-		if ( newEntry != original ) {
-			EntityEntryExtraState extraState = newEntry.getExtraState( EntityEntryExtraState.class );
-			if ( extraState == null ) {
-				newEntry.addExtraState( original.getExtraState( EntityEntryExtraState.class ) );
-			}
-		}
-
+		( (RxSession) source ).getRxActionQueue().addAction( insert );
 		return id;
 	}
 
@@ -303,7 +313,7 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 		}
 	}
 
-	private AbstractEntityInsertAction addInsertAction(
+	private RxEntityInsertAction createInsertAction(
 			Object[] values,
 			Object id,
 			Object entity,
@@ -312,7 +322,8 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 			EventSource source,
 			boolean shouldDelayIdentityInserts,
 			CompletionStage<?> stage) {
-//		AbstractEntityInsertAction insertAction = null;
+
+		//		AbstractEntityInsertAction insertAction = null;
 //		if ( useIdentityColumn ) {
 //			insertAction = new RxEntityIdentityInsertAction(
 //					values,
@@ -337,7 +348,6 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 					stage
 			);
 //		}
-		( (RxHibernateSession) source ).getRxActionQueue().addAction( insertAction );
 		return insertAction;
 
 	}
