@@ -4,9 +4,7 @@ import org.hibernate.Session;
 import org.hibernate.engine.spi.AbstractDelegatingSessionBuilderImplementor;
 import org.hibernate.engine.spi.SessionBuilderImplementor;
 import org.hibernate.event.spi.EventSource;
-import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxSession;
-import org.hibernate.rx.RxHibernateSessionFactory;
 import org.hibernate.rx.engine.spi.RxHibernateSessionBuilderImplementor;
 import org.hibernate.rx.engine.spi.RxHibernateSessionFactoryImplementor;
 
@@ -24,8 +22,8 @@ public class RxHibernateSessionBuilderDelegator extends AbstractDelegatingSessio
 	}
 
 	@Override
-	public RxHibernateSession openRxSession() {
+	public RxSession openRxSession() {
 		Session session = builder.openSession();
-		return new RxHibernateSessionImpl( factory, (EventSource) session );
+		return new RxSessionImpl( factory, (EventSource) session );
 	}
 }

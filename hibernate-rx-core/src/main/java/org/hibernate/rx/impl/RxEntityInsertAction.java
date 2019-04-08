@@ -92,62 +92,72 @@ public final class RxEntityInsertAction extends AbstractEntityInsertAction {
 
 		// Don't need to lock the cache here, since if someone
 		// else inserted the same pk first, the insert would fail
+		CompletionStage<Void> postInsertStage = stage.thenAccept( (ignore) -> {
+			if ( !veto ) {
+				PersistenceContext persistenceContext = session.getPersistenceContext();
+				final EntityEntry entry = persistenceContext.getEntry( instance );
+				if ( entry == null ) {
+					throw new AssertionFailure( "possible non-threadsafe access to session" );
+				}
+
+				entry.postInsert( getState() );
+
+				if ( entityDescriptor.hasInsertGeneratedProperties() ) {
+					entityDescriptor.processInsertGeneratedProperties( id, instance, getState(), session );
+					if ( entityDescriptor.isVersionPropertyGenerated() ) {
+						version = Versioning.getVersion( getState(), entityDescriptor );
+					}
+					entry.postUpdate( instance, getState(), version );
+				}
+
+				persistenceContext.registerInsertedKey( entityDescriptor, getId() );
+			}
+
+			final SessionFactoryImplementor factory = session.getFactory();
+
+			if ( isCachePutEnabled( entityDescriptor, session ) ) {
+				final EntityDataAccess cacheAccess = factory.getCache()
+						.getEntityRegionAccess( entityDescriptor.getNavigableRole() );
+
+				final CacheEntry ce = entityDescriptor.buildCacheEntry(
+						instance,
+						getState(),
+						version,
+						session
+				);
+				cacheEntry = entityDescriptor.getCacheEntryStructure().structure( ce );
+				final Object ck = cacheAccess.generateCacheKey(
+						id,
+						entityDescriptor.getHierarchy(),
+						factory,
+						session.getTenantIdentifier()
+				);
+
+				final boolean put = cacheInsert( entityDescriptor, ck );
+
+				if ( put && factory.getStatistics().isStatisticsEnabled() ) {
+					factory.getStatistics().entityCachePut(
+							entityDescriptor.getNavigableRole(),
+							cacheAccess.getRegion().getName()
+					);
+				}
+			}
+
+			handleNaturalIdPostSaveNotifications( id );
+
+			postInsert();
+
+			if ( factory.getStatistics().isStatisticsEnabled() && !veto ) {
+				factory.getStatistics().insertEntity( getEntityDescriptor().getEntityName() );
+			}
+
+			markExecuted();
+		} );
 
 		if ( !veto ) {
 			entityDescriptor.insert( id, getState(), instance, session, stage );
-			PersistenceContext persistenceContext = session.getPersistenceContext();
-			final EntityEntry entry = persistenceContext.getEntry( instance );
-			if ( entry == null ) {
-				throw new AssertionFailure( "possible non-threadsafe access to session" );
-			}
-
-			entry.postInsert( getState() );
-
-			if ( entityDescriptor.hasInsertGeneratedProperties() ) {
-				entityDescriptor.processInsertGeneratedProperties( id, instance, getState(), session );
-				if ( entityDescriptor.isVersionPropertyGenerated() ) {
-					version = Versioning.getVersion( getState(), entityDescriptor );
-				}
-				entry.postUpdate( instance, getState(), version );
-			}
-
-			persistenceContext.registerInsertedKey( entityDescriptor, getId() );
 		}
 
-		final SessionFactoryImplementor factory = session.getFactory();
-
-		if ( isCachePutEnabled( entityDescriptor, session ) ) {
-			final EntityDataAccess cacheAccess = factory.getCache()
-					.getEntityRegionAccess( entityDescriptor.getNavigableRole() );
-
-			final CacheEntry ce = entityDescriptor.buildCacheEntry(
-					instance,
-					getState(),
-					version,
-					session
-			);
-			cacheEntry = entityDescriptor.getCacheEntryStructure().structure( ce );
-			final Object ck = cacheAccess.generateCacheKey( id, entityDescriptor.getHierarchy(), factory, session.getTenantIdentifier() );
-
-			final boolean put = cacheInsert( entityDescriptor, ck );
-
-			if ( put && factory.getStatistics().isStatisticsEnabled() ) {
-				factory.getStatistics().entityCachePut(
-						entityDescriptor.getNavigableRole(),
-						cacheAccess.getRegion().getName()
-				);
-			}
-		}
-
-		handleNaturalIdPostSaveNotifications( id );
-
-		postInsert();
-
-		if ( factory.getStatistics().isStatisticsEnabled() && !veto ) {
-			factory.getStatistics().insertEntity( getEntityDescriptor().getEntityName() );
-		}
-
-		markExecuted();
 	}
 
 	private boolean cacheInsert(EntityTypeDescriptor descriptor, Object ck) {

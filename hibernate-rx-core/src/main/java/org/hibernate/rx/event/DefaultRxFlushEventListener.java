@@ -7,17 +7,12 @@ import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.FlushEvent;
 import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.internal.CoreMessageLogger;
-import org.hibernate.rx.RxHibernateSession;
+import org.hibernate.rx.RxSession;
 
 import org.jboss.logging.Logger;
 
 public class DefaultRxFlushEventListener extends DefaultFlushEventListener {
 	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, DefaultRxFlushEventListener.class.getName() );
-
-	@Override
-	public void onFlush(FlushEvent event) throws HibernateException {
-		super.onFlush( event );
-	}
 
 	protected void performExecutions(EventSource session) {
 		LOG.trace( "Executing flush" );
@@ -32,7 +27,7 @@ public class DefaultRxFlushEventListener extends DefaultFlushEventListener {
 			// we need to lock the collection caches before executing entity inserts/updates in order to
 			// account for bi-directional associations
 			session.getActionQueue().prepareActions();
-			( (RxHibernateSession) session ).getRxActionQueue().executeActions();
+			( (RxSession) session ).getRxActionQueue().executeActions();
 		}
 		finally {
 			session.getPersistenceContext().setFlushing( false );
