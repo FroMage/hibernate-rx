@@ -8,7 +8,6 @@ import org.hibernate.HibernateException;
 import org.hibernate.boot.model.domain.EntityMapping;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.internal.TemplateParameterBindingContext;
-import org.hibernate.loader.spi.SingleIdEntityLoader;
 import org.hibernate.metamodel.model.creation.spi.RuntimeModelCreationContext;
 import org.hibernate.metamodel.model.domain.internal.entity.SingleTableEntityTypeDescriptor;
 import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
@@ -45,8 +44,8 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 	}
 
 	@Override
-	public SingleIdEntityLoader getSingleIdLoader() {
-		return super.getSingleIdLoader();
+	public RxSingleIdEntityLoader getSingleIdLoader() {
+		return new RxSingleIdEntityLoader( this );
 	}
 
 	public void delete(

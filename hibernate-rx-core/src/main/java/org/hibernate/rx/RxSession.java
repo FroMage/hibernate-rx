@@ -2,6 +2,7 @@ package org.hibernate.rx;
 
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 import org.hibernate.HibernateException;
@@ -26,4 +27,7 @@ public interface RxSession extends Session {
 	RxActionQueue getRxActionQueue();
 
 	CompletionStage<Void> removeAsync(Object entity);
+
+	// Maybe this should be more an execute or run method
+	Executor getExecutor();
 }

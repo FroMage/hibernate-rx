@@ -39,3 +39,4 @@ public class RxLoadEvent<T> extends LoadEvent {
 		loadStage.toCompletableFuture().complete( optional );
 	}
 }
+

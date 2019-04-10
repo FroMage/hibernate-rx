@@ -90,6 +90,11 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	}
 
 	@Override
+	public Executor getExecutor() {
+		return executor;
+	}
+
+	@Override
 	public <T> T unwrap(Class<T> clazz) {
 		checkOpen();
 

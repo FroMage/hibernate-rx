@@ -1,7 +1,6 @@
 package org.hibernate.rx;
 
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletionStage;
 import javax.persistence.Entity;
@@ -64,6 +63,7 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		builer.applySetting( AvailableSettings.USER, "hibernate-rx" );
 		builer.applySetting( AvailableSettings.PASS, "hibernate-rx" );
 		builer.applySetting( AvailableSettings.URL, "jdbc:postgresql://localhost:5432/hibernate-rx" );
+		builer.applySetting( AvailableSettings.USE_SECOND_LEVEL_CACHE, false );
 	}
 
 	@Override
@@ -94,6 +94,28 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 							() -> assertThat( result ).isNotPresent(),
 							() -> assertThat( err ).isNull()
 					) );
+		} );
+	}
+
+	@Test
+	public void testFind(VertxTestContext testContext) throws Exception {
+		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
+
+		CompletionStage<Void> persistStage = session.persistAsync( mibbles );
+		persistStage
+				.exceptionally( err -> {
+					testContext.failNow( err );
+					return null;
+				} )
+				.thenAccept( ignore -> {
+					session.clear();
+					session.findAsync( GuineaPig.class, 22 ).whenComplete( (result, err) -> {
+						assertAsync( testContext, () ->
+								assertAll(
+										() -> assertThat( result ).hasValue( mibbles ),
+								() -> assertThat( err ).isNull()
+						) );
+			} );
 		} );
 	}
 
