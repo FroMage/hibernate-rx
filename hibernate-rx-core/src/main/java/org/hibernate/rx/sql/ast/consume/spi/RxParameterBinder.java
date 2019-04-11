@@ -6,10 +6,6 @@
  */
 package org.hibernate.rx.sql.ast.consume.spi;
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-
-import org.hibernate.annotations.Remove;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 
 import io.reactiverse.pgclient.PgPreparedQuery;

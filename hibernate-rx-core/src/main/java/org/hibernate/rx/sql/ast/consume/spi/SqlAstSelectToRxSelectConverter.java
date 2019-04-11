@@ -22,9 +22,7 @@ import org.hibernate.type.descriptor.spi.SqlTypeDescriptorIndicators;
 /**
  * The final phase of query translation.  Here we take the SQL-AST an
  * "interpretation".  For a select query, that means an instance of
- * {@link JdbcSelect}.
- *
- * @author Steve Ebersole
+ * {@link RxSelect}.
  */
 public class SqlAstSelectToRxSelectConverter
 		extends AbstractSqlAstToJdbcOperationConverter

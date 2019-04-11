@@ -66,14 +66,19 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 
 	@Override
 	protected void entityIsTransient(PersistEvent event, Map createCache) {
-		LOG.trace( "Saving transient instance" );
+		if ( event instanceof RxPersistEvent ) {
+			LOG.trace( "Saving transient instance" );
 
-		RxPersistEvent rxEvent = (RxPersistEvent) event;
-		try {
-			saveTransientEntity( rxEvent, createCache );
+			RxPersistEvent rxEvent = (RxPersistEvent) event;
+			try {
+				saveTransientEntity( rxEvent, createCache );
+			}
+			catch (Throwable t) {
+				rxEvent.completeExceptionally( t );
+			}
 		}
-		catch (Throwable t) {
-			rxEvent.completeExceptionally( t );
+		else {
+			super.entityIsTransient( event, createCache );
 		}
 	}
 

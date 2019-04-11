@@ -28,6 +28,7 @@ import org.hibernate.ObjectDeletedException;
 import org.hibernate.ObjectNotFoundException;
 import org.hibernate.Session;
 import org.hibernate.TypeMismatchException;
+import org.hibernate.engine.spi.ActionQueue;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.SessionDelegatorBaseImpl;
 import org.hibernate.engine.spi.SessionImplementor;
@@ -92,6 +93,11 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	@Override
 	public Executor getExecutor() {
 		return executor;
+	}
+
+	@Override
+	public ActionQueue getActionQueue() {
+		return getRxActionQueue();
 	}
 
 	@Override
@@ -174,8 +180,6 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		executor.execute( () -> {
 			checkOpen();
 			firePersist( new RxPersistEvent( null, object, this, persistStage ) );
-			// At the moment we don't support tx;
-			flush();
 		} );
 		return persistStage;
 	}

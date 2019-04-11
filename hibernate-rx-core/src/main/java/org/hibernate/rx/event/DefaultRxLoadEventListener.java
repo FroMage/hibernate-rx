@@ -5,7 +5,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import org.hibernate.HibernateException;
-import org.hibernate.LockMode;
 import org.hibernate.NonUniqueObjectException;
 import org.hibernate.NotYetImplementedFor6Exception;
 import org.hibernate.PersistentObjectException;
@@ -50,23 +49,28 @@ public class DefaultRxLoadEventListener implements LoadEventListener {
 
 	@Override
 	public void onLoad(LoadEvent event, LoadType loadType) {
+		RxLoadEvent rxEvent = (RxLoadEvent) event;
+		try {
+			final EntityTypeDescriptor entityDescriptor = getDescriptor( event );
 
-		final EntityTypeDescriptor entityDescriptor = getDescriptor( event );
+			if ( entityDescriptor == null ) {
+				throw new HibernateException( "Unable to locate entityDescriptor: " + event.getEntityClassName() );
+			}
 
-		if ( entityDescriptor == null ) {
-			throw new HibernateException( "Unable to locate entityDescriptor: " + event.getEntityClassName() );
+			final Class idClass = entityDescriptor.getHierarchy().getIdentifierDescriptor().getJavaType();
+			if ( idClass != null &&
+					!idClass.isInstance( event.getEntityId() ) &&
+					!DelayedPostInsertIdentifier.class.isInstance( event.getEntityId() ) ) {
+				checkIdClass( entityDescriptor, event, loadType, idClass );
+			}
+
+			doOnLoad( entityDescriptor, event, loadType )
+					.exceptionally( err -> { rxEvent.completeExceptionally( err ); return null; } )
+					.thenAccept( entity -> { rxEvent.complete( entity ); } );
 		}
-
-		final Class idClass = entityDescriptor.getHierarchy().getIdentifierDescriptor().getJavaType();
-		if ( idClass != null &&
-				!idClass.isInstance( event.getEntityId() ) &&
-				!DelayedPostInsertIdentifier.class.isInstance( event.getEntityId() ) ) {
-			checkIdClass( entityDescriptor, event, loadType, idClass );
+		catch (Throwable ex) {
+			rxEvent.completeExceptionally( ex );
 		}
-
-		doOnLoad( entityDescriptor, event, loadType ).thenAccept( entity -> {
-			event.setResult( entity );
-		} );
 	}
 
 	protected EntityTypeDescriptor getDescriptor(final LoadEvent event) {
@@ -213,33 +217,33 @@ public class DefaultRxLoadEventListener implements LoadEventListener {
 				options
 		);
 
-		if ( persistenceContextEntry.getEntity() != null ) {
-			return CompletableFuture.completedFuture(
-					persistenceContextEntry.isManaged()
-							? persistenceContextEntry.getEntity()
-							: null );
-		}
-		else {
-			Object entity = CacheEntityLoaderHelper.INSTANCE.loadFromSecondLevelCache( event, entityDescriptor, keyToLoad );
-			if ( entity != null ) {
-				logTrace( entityDescriptor, "Resolved object in second-level cache: {0}", event );
-				if ( entityDescriptor.getHierarchy().getNaturalIdDescriptor() != null ) {
-					event.getSession().getPersistenceContext().getNaturalIdHelper().cacheNaturalIdCrossReferenceFromLoad(
-							entityDescriptor,
-							event.getEntityId(),
-							event.getSession().getPersistenceContext().getNaturalIdHelper().extractNaturalIdValues(
-									entity,
-									entityDescriptor
-							)
-					);
-				}
-				return CompletableFuture.completedFuture( entity );
-			}
-			else {
+//		if ( persistenceContextEntry.getEntity() != null ) {
+//			return CompletableFuture.completedFuture(
+//					persistenceContextEntry.isManaged()
+//							? persistenceContextEntry.getEntity()
+//							: null );
+//		}
+//		else {
+//			Object entity = CacheEntityLoaderHelper.INSTANCE.loadFromSecondLevelCache( event, entityDescriptor, keyToLoad );
+//			if ( entity != null ) {
+//				logTrace( entityDescriptor, "Resolved object in second-level cache: {0}", event );
+//				if ( entityDescriptor.getHierarchy().getNaturalIdDescriptor() != null ) {
+//					event.getSession().getPersistenceContext().getNaturalIdHelper().cacheNaturalIdCrossReferenceFromLoad(
+//							entityDescriptor,
+//							event.getEntityId(),
+//							event.getSession().getPersistenceContext().getNaturalIdHelper().extractNaturalIdValues(
+//									entity,
+//									entityDescriptor
+//							)
+//					);
+//				}
+//				return CompletableFuture.completedFuture( entity );
+//			}
+//			else {
 				logTrace( entityDescriptor, "Object not resolved in any cache: {0}", event );
 				return loadFromDatasource( event, entityDescriptor );
-			}
-		}
+//			}
+//		}
 	}
 
 	private void logTrace(EntityTypeDescriptor entityDescriptor, String text, LoadEvent event) {
@@ -326,6 +330,7 @@ public class DefaultRxLoadEventListener implements LoadEventListener {
 					if ( entityDescriptor.canWriteToCache() ) {
 						cacheAccess.unlockItem( source, ck, lock );
 					}
+					// We return a stage completed exceptionally
 					throw new HibernateException( err );
 				} )
 				.thenApply( entity -> {

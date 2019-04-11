@@ -6,20 +6,16 @@
  */
 package org.hibernate.rx.sql.ast.consume.spi;
 
-import java.util.List;
 import java.util.Set;
 
-public interface RxOperation {
-	/**
-	 * Get the SQL command we will be executing through JDBC PreparedStatement
-	 * or CallableStatement
-	 */
-	String getSql();
+import org.hibernate.sql.ast.consume.spi.SqlAstWalker;
+import org.hibernate.type.descriptor.spi.SqlTypeDescriptorIndicators;
 
-	/**
-	 * Get the list of parameter binders for the generated PreparedStatement
-	 */
-	List<RxParameterBinder> getParameterBinders();
-
+/**
+ * Base contract for {@link SqlAstWalker} implementations that convert
+ * SQL AST into a {@link RxOperation}
+ */
+public interface SqlAstToRxOperationConverter
+		extends SqlAstWalker, SqlTypeDescriptorIndicators {
 	Set<String> getAffectedTableNames();
 }

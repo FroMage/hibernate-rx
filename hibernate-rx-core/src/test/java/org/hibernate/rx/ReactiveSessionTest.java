@@ -1,10 +1,17 @@
 package org.hibernate.rx;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
-import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.stream.Collectors;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.Id;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToMany;
 import javax.persistence.Table;
 
 import org.hibernate.boot.MetadataSources;
@@ -23,6 +30,7 @@ import io.vertx.junit5.Timeout;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 
+import static java.util.concurrent.CompletableFuture.allOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
@@ -54,10 +62,7 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 	@Override
 	protected void applySettings(StandardServiceRegistryBuilder builer) {
 		// TODO: Move this somewhere else in the implementation
-		builer.applySetting(
-				PersisterClassResolverInitiator.IMPL_NAME,
-				RxRuntimeModelDescriptorResolver.class.getName()
-		);
+		builer.applySetting( PersisterClassResolverInitiator.IMPL_NAME, RxRuntimeModelDescriptorResolver.class.getName() );
 		builer.applySetting( AvailableSettings.DIALECT, "org.hibernate.dialect.PostgreSQL9Dialect" );
 		builer.applySetting( AvailableSettings.DRIVER, "org.postgresql.Driver" );
 		builer.applySetting( AvailableSettings.USER, "hibernate-rx" );
@@ -113,8 +118,8 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 										() -> assertThat( result ).hasValue( mibbles ),
 										() -> assertThat( err ).isNull()
 								) );
-			} );
-		} );
+					} );
+				} );
 	}
 
 	@Test
@@ -130,10 +135,36 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 								() -> assertThat( ignore ).isNull(),
 								() -> assertThat( err ).isNull()
 						) );
-			} ).thenAccept( (ignore)-> {
 			} );
 
 		} );
+	}
+
+	@Test
+	public void testAssociation(VertxTestContext testContext) throws Exception {
+		GuineaPig kirby = new GuineaPig( 225, "Kirby" );
+		GuineaPig thor = new GuineaPig( 221, "Thor", kirby );
+		GuineaPig tony = new GuineaPig( 222, "Tony", kirby );
+		GuineaPig hulk = new GuineaPig( 223, "Hulk", kirby );
+		GuineaPig steve = new GuineaPig( 224, "Steven", kirby );
+
+		List<GuineaPig> avengers = Arrays.asList( thor, tony, hulk, steve );
+
+		List<CompletableFuture<Void>> allStages = avengers.stream()
+				.map( avenger -> {
+					return session.persistAsync( avenger ).toCompletableFuture();
+				} )
+				.collect( Collectors.toList() );
+
+		allStages.add( 0, session.persistAsync( kirby ).toCompletableFuture() );
+
+		session.flush();
+
+		allOf( allStages.toArray( new CompletableFuture[allStages.size()] ) )
+				.exceptionally( err -> { testContext.failNow( err ); return null; } )
+				.thenAccept( ignore -> {
+					testContext.completeNow();
+				} );
 	}
 
 	@Test
@@ -169,17 +200,23 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		private Integer id;
 		private String name;
 
+		@OneToMany(mappedBy = "father", fetch = FetchType.EAGER)
+		private List<GuineaPig> children = new ArrayList<>();
+
+		@ManyToOne
+		private GuineaPig father;
+
 		public GuineaPig() {
 		}
 
-		public GuineaPig(String name) {
-			this.id = new Random().nextInt();
-			this.name = name;
+		public GuineaPig(Integer id, String name) {
+			this( id, name, null );
 		}
 
-		public GuineaPig(Integer id, String name) {
+		public GuineaPig(Integer id, String name, GuineaPig father) {
 			this.id = id;
 			this.name = name;
+			this.father = father;
 		}
 
 		public Integer getId() {
@@ -196,6 +233,22 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 
 		public void setName(String name) {
 			this.name = name;
+		}
+
+		public List<GuineaPig> getChildren() {
+			return children;
+		}
+
+		public void setChildren(List<GuineaPig> children) {
+			this.children = children;
+		}
+
+		public GuineaPig getFather() {
+			return father;
+		}
+
+		public void setFather(GuineaPig father) {
+			this.father = father;
 		}
 
 		@Override

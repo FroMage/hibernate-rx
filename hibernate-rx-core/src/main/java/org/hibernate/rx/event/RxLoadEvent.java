@@ -38,5 +38,23 @@ public class RxLoadEvent<T> extends LoadEvent {
 		Optional<T> optional = Optional.ofNullable( (T) result );
 		loadStage.toCompletableFuture().complete( optional );
 	}
+
+	/**
+	 * It stores the result and complete the stage for the asyncronous operations.
+	 * <p>
+	 * This method behaves exactly like {@link #setResult(Object)},
+	 * it exists only for consistency and clarity.
+	 * </p>
+	 *
+	 * @param result the loaded object
+	 * @see #setResult(Object)
+	 */
+	public void complete(Object result) {
+		setResult( result );
+	}
+
+	public void completeExceptionally(Throwable ex) {
+		loadStage.toCompletableFuture().completeExceptionally( ex );
+	}
 }
 

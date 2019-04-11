@@ -20,6 +20,7 @@ import org.hibernate.query.NavigablePath;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.query.spi.QueryParameterBindings;
 import org.hibernate.rx.RxSession;
+import org.hibernate.rx.sql.exec.internal.RxSelectExecutorStandard;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.JoinType;
@@ -116,7 +117,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 
 		final JdbcParameterBindings jdbcParameterBindings = resolveJdbcParameters( id, session );
 
-		final List<T> list = JdbcSelectExecutorStandardImpl.INSTANCE.list(
+		final List<T> list = RxSelectExecutorStandard.INSTANCE.list(
 				jdbcSelect,
 				new ExecutionContext() {
 					@Override

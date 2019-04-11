@@ -11,6 +11,8 @@ import org.hibernate.sql.exec.spi.ExecutionContext;
 
 import io.reactiverse.pgclient.PgConnection;
 import io.reactiverse.pgclient.PgPool;
+import io.reactiverse.pgclient.PgResult;
+import io.reactiverse.pgclient.PgRowSet;
 import io.reactiverse.pgclient.impl.ArrayTuple;
 
 public class RxMutationExecutor {
@@ -30,7 +32,7 @@ public class RxMutationExecutor {
 						ar2 -> {
 							pgConnection.close();
 							if ( ar2.succeeded() ) {
-								final Object rowSet = ar2.result();
+								final PgResult rowSet = ar2.result();
 								// Right now we only run Insert or Delete
 								operationStage.toCompletableFuture().complete( null );
 							}
