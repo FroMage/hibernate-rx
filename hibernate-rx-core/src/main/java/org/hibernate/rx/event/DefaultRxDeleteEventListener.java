@@ -2,6 +2,7 @@ package org.hibernate.rx.event;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import org.hibernate.HibernateException;
@@ -15,11 +16,11 @@ import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.engine.spi.Status;
 import org.hibernate.event.internal.DefaultDeleteEventListener;
+import org.hibernate.event.internal.RxOnUpdateVisitor;
 import org.hibernate.event.service.spi.DuplicationStrategy;
 import org.hibernate.event.spi.DeleteEvent;
 import org.hibernate.event.spi.DeleteEventListener;
 import org.hibernate.event.spi.EventSource;
-import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.jpa.event.spi.CallbackRegistry;
@@ -40,8 +41,19 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 
 	@Override
 	public void onDelete(DeleteEvent event, Set transientEntities) throws HibernateException {
-		RxDeleteEvent rxEvent = (RxDeleteEvent) event;
+		doDelete( event, transientEntities ).whenComplete( (ignore, err) -> {
+			if ( err != null ) {
+				( (RxDeleteEvent) event ).completeExceptionally( err );
+			}
+			else {
+				( (RxDeleteEvent) event ).complete();
+			}
+		} );
+	}
 
+	private CompletionStage<?> doDelete(DeleteEvent event, Set transientEntities) {
+		RxDeleteEvent rxEvent = (RxDeleteEvent) event;
+		CompletionStage<Void> deleteStage = new CompletableFuture<>();
 		EventSource source = event.getSession();
 		final RxSession rxSession = source.unwrap( RxSession.class );
 
@@ -60,25 +72,25 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 
 			if ( ForeignKeys.isTransient( descriptor.getEntityName(), entity, null, source.unwrap( SharedSessionContractImplementor.class ) ) ) {
 				deleteTransientEntity( source.unwrap( EventSource.class ), entity, event.isCascadeDeleteEnabled(), descriptor, transientEntities );
+				deleteStage.toCompletableFuture().complete( null );
 				// EARLY EXIT!!!
-				return;
+				return deleteStage;
 			}
 			performDetachedEntityDeletionCheck( event );
 
 			id = descriptor.getIdentifier( entity, source );
 
 			if ( id == null ) {
-				throw new TransientObjectException(
+				deleteStage.toCompletableFuture().completeExceptionally( new TransientObjectException(
 						"the detached instance passed to delete() had a null identifier"
-				);
+				) );
+				return deleteStage;
 			}
 
 			final EntityKey key = source.generateEntityKey( id, descriptor );
-
 			persistenceContext.checkUniqueness( key, entity );
 
-			// TDOO: Not sure what this is for
-//			new OnUpdateVisitor( source, id, entity ).process( entity, descriptor );
+			new RxOnUpdateVisitor( source, id, entity ).process( entity, descriptor );
 
 			version = descriptor.getVersion( entity );
 
@@ -99,7 +111,8 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 
 			if ( entityEntry.getStatus() == Status.DELETED || entityEntry.getStatus() == Status.GONE ) {
 				LOG.trace( "Object was already deleted" );
-				return;
+				deleteStage.toCompletableFuture().complete( null );
+				return deleteStage;
 			}
 			descriptor = entityEntry.getDescriptor();
 			id = entityEntry.getId();
@@ -114,8 +127,15 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 		}*/
 
 		if ( invokeDeleteLifecycle( source, entity, descriptor ) ) {
-			return;
+			deleteStage.toCompletableFuture().complete( null );
+			return deleteStage;
 		}
+
+		deleteStage.thenAccept( ignore -> {
+			if ( source.getFactory().getSettings().isIdentifierRollbackEnabled() ) {
+				descriptor.resetIdentifier( entity, id, version, source );
+			}
+		} );
 
 		deleteEntity(
 				source,
@@ -125,12 +145,10 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 				event.isOrphanRemovalBeforeUpdates(),
 				descriptor,
 				transientEntities,
-				rxEvent.getStage()
+				deleteStage
 		);
 
-		if ( source.getFactory().getSettings().isIdentifierRollbackEnabled() ) {
-			descriptor.resetIdentifier( entity, id, version, source );
-		}
+		return deleteStage;
 	}
 
 	protected final void deleteEntity(

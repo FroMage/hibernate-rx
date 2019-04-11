@@ -1,13 +1,13 @@
 package org.hibernate.rx.event;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import org.hibernate.FlushMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.NonUniqueObjectException;
-import org.hibernate.action.internal.EntityIdentityInsertAction;
 import org.hibernate.engine.internal.Versioning;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityEntryExtraState;
@@ -68,23 +68,32 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 	protected void entityIsTransient(PersistEvent event, Map createCache) {
 		LOG.trace( "Saving transient instance" );
 
-		final EventSource source = event.getSession();
-		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
-
-		RxPersistEvent rxPersistEvent = (RxPersistEvent) event;
-		CompletionStage<Void> stage = rxPersistEvent.getStage();
-		if ( createCache.put( entity, entity ) == null ) {
-			saveWithGeneratedId( entity, event.getEntityName(), createCache, source, false, stage );
+		RxPersistEvent rxEvent = (RxPersistEvent) event;
+		try {
+			saveTransientEntity( rxEvent, createCache );
+		}
+		catch (Throwable t) {
+			rxEvent.completeExceptionally( t );
 		}
 	}
 
-	protected Object saveWithGeneratedId(
+	private void saveTransientEntity(RxPersistEvent event, Map createCache ) {
+		final EventSource source = event.getSession();
+		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
+		if ( createCache.put( entity, entity ) == null ) {
+			saveWithGeneratedId( entity, event.getEntityName(), createCache, source,false )
+					.exceptionally( err -> { event.completeExceptionally( err ); return null; } )
+					.thenAccept( ignore -> { event.complete(); } );
+		}
+	}
+
+	protected CompletionStage<Object> saveWithGeneratedId(
 			Object entity,
 			String entityName,
 			Object anything,
 			EventSource source,
-			boolean requiresImmediateIdAccess,
-			CompletionStage<?> stage) {
+			boolean requiresImmediateIdAccess) {
+		CompletableFuture<Object> saveWithIdStage = new CompletableFuture<>();
 		callbackRegistry.preCreate( entity );
 
 		if ( entity instanceof SelfDirtinessTracker ) {
@@ -98,13 +107,15 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 				.getIdentifierValueGenerator()
 				.generate( source, entity );
 		if ( generatedId == null ) {
-			throw new IdentifierGenerationException( "null id generated for:" + entity.getClass() );
+			saveWithIdStage.completeExceptionally( new IdentifierGenerationException( "null id generated for:" + entity.getClass() ) );
+			return saveWithIdStage;
 		}
 		else if ( generatedId == IdentifierGeneratorHelper.SHORT_CIRCUIT_INDICATOR ) {
-			return source.getIdentifier( entity );
+			saveWithIdStage.complete( source.getIdentifier( entity ) );
+			return saveWithIdStage;
 		}
 		else if ( generatedId == IdentifierGeneratorHelper.POST_INSERT_INDICATOR ) {
-			return performSave( entity, null, entityDescriptor, true, anything, source, requiresImmediateIdAccess, stage );
+			return performSave( entity, null, entityDescriptor, true, anything, source, requiresImmediateIdAccess, saveWithIdStage );
 		}
 		else {
 			// TODO: define toString()s for generators
@@ -116,11 +127,11 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 				);
 			}
 
-			return performSave( entity, generatedId, entityDescriptor, false, anything, source, true, stage );
+			return performSave( entity, generatedId, entityDescriptor, false, anything, source, true, saveWithIdStage );
 		}
 	}
 
-	protected Object performSave(
+	protected CompletionStage<Object> performSave(
 			Object entity,
 			Object id,
 			EntityTypeDescriptor descriptor,
@@ -128,7 +139,7 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 			Object anything,
 			EventSource source,
 			boolean requiresImmediateIdAccess,
-			CompletionStage<?> stage) {
+			CompletionStage<Object> performSaveStage) {
 
 		if ( LOG.isTraceEnabled() ) {
 			LOG.tracev( "Saving {0}", MessageHelper.infoString( descriptor, id, source.getFactory() ) );
@@ -143,7 +154,8 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 					source.forceFlush( source.getPersistenceContext().getEntry( old ) );
 				}
 				else {
-					throw new NonUniqueObjectException( id, descriptor.getEntityName() );
+					performSaveStage.toCompletableFuture().completeExceptionally( new NonUniqueObjectException( id, descriptor.getEntityName() ) );
+					return performSaveStage;
 				}
 			}
 			descriptor.setIdentifier( entity, id, source );
@@ -153,7 +165,9 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 		}
 
 		if ( invokeSaveLifecycle( entity, descriptor, source ) ) {
-			return id; //EARLY EXIT
+			//EARLY EXIT
+			performSaveStage.toCompletableFuture().complete( id );
+			return performSaveStage;
 		}
 
 		return performSaveOrReplicate(
@@ -164,11 +178,11 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 				anything,
 				source,
 				requiresImmediateIdAccess,
-				stage
+				performSaveStage
 		);
 	}
 
-	protected Object performSaveOrReplicate(
+	protected CompletionStage<Object> performSaveOrReplicate(
 			Object entity,
 			EntityKey key,
 			EntityTypeDescriptor entityDescriptor,
@@ -222,7 +236,7 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 				StateArrayContributor::isUpdatable
 		);
 
-		CompletionStage<?> postInsertStage = stage.thenAccept( (ignore) -> {
+		CompletionStage<Object> postInsertStage = stage.thenAccept( ignore -> {
 
 			//			// postpone initializing id in case the insert has non-nullable transient dependencies
 //			// that are not resolved until cascadeAfterSave() is executed
@@ -261,7 +275,7 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 		);
 
 		( (RxSession) source ).getRxActionQueue().addAction( insert );
-		return id;
+		return postInsertStage;
 	}
 
 
@@ -321,7 +335,7 @@ public class DefaultRxPersistEventListener extends DefaultPersistEventListener i
 			boolean useIdentityColumn,
 			EventSource source,
 			boolean shouldDelayIdentityInserts,
-			CompletionStage<?> stage) {
+			CompletionStage<Object> stage) {
 
 		//		AbstractEntityInsertAction insertAction = null;
 //		if ( useIdentityColumn ) {

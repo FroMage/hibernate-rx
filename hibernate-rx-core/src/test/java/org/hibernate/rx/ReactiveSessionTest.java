@@ -26,7 +26,7 @@ import io.vertx.junit5.VertxTestContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
-@Timeout(60_000) // 1 H, I need to debug
+@Timeout(3600_000) // 1 H, I need to debug
 @ExtendWith(VertxExtension.class)
 public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 

@@ -4,7 +4,6 @@ import java.util.concurrent.CompletionStage;
 
 import org.hibernate.event.spi.DeleteEvent;
 import org.hibernate.event.spi.EventSource;
-import org.hibernate.event.spi.PersistEvent;
 import org.hibernate.rx.RxSession;
 
 /**
@@ -31,7 +30,12 @@ public class RxDeleteEvent extends DeleteEvent {
 		this.stage = stage;
 	}
 
-	public CompletionStage<Void> getStage() {
-		return stage;
+
+	public void complete() {
+		stage.toCompletableFuture().complete( null );
+	}
+
+	public void completeExceptionally(Throwable err) {
+		stage.toCompletableFuture().completeExceptionally( err );
 	}
 }
