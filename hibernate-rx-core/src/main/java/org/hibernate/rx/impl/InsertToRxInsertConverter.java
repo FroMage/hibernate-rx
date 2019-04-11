@@ -7,17 +7,15 @@ import java.util.Set;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.model.relational.spi.PhysicalTable;
-import org.hibernate.rx.sql.exec.spi.RxMutation;
-import org.hibernate.rx.sql.exec.spi.RxParameterBinder;
+import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
+import org.hibernate.rx.sql.ast.consume.spi.RxParameterBinder;
 import org.hibernate.sql.ast.consume.spi.AbstractSqlAstToJdbcOperationConverter;
-import org.hibernate.sql.ast.consume.spi.InsertToJdbcInsertConverter;
 import org.hibernate.sql.ast.consume.spi.SqlMutationToJdbcMutationConverter;
 import org.hibernate.sql.ast.tree.spi.InsertStatement;
 import org.hibernate.sql.ast.tree.spi.expression.ColumnReference;
 import org.hibernate.sql.ast.tree.spi.expression.Expression;
 import org.hibernate.sql.ast.tree.spi.expression.GenericParameter;
 import org.hibernate.sql.exec.spi.ExecutionContext;
-import org.hibernate.sql.exec.spi.JdbcInsert;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.sql.exec.spi.JdbcParameterBinding;
 
@@ -66,11 +64,11 @@ public class InsertToRxInsertConverter extends AbstractSqlAstToJdbcOperationConv
 		return rxParameterBinders;
 	}
 
-	public static RxMutation createRxInsert(InsertStatement sqlAst, SessionFactoryImplementor sessionFactory) {
+	public static RxOperation createRxInsert(InsertStatement sqlAst, SessionFactoryImplementor sessionFactory) {
 		final InsertToRxInsertConverter walker = new InsertToRxInsertConverter( sessionFactory );
 		walker.processStatement( sqlAst );
 		// TODO: Create specific class for insert? Ex: InsertRxMutation
-		return new RxMutation() {
+		return new RxOperation() {
 			@Override
 			public String getSql() {
 				return walker.getSql();

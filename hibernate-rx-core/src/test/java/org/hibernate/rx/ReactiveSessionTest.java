@@ -63,7 +63,6 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		builer.applySetting( AvailableSettings.USER, "hibernate-rx" );
 		builer.applySetting( AvailableSettings.PASS, "hibernate-rx" );
 		builer.applySetting( AvailableSettings.URL, "jdbc:postgresql://localhost:5432/hibernate-rx" );
-		builer.applySetting( AvailableSettings.USE_SECOND_LEVEL_CACHE, false );
 	}
 
 	@Override
@@ -108,13 +107,12 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 					return null;
 				} )
 				.thenAccept( ignore -> {
-					session.clear();
 					session.findAsync( GuineaPig.class, 22 ).whenComplete( (result, err) -> {
 						assertAsync( testContext, () ->
 								assertAll(
 										() -> assertThat( result ).hasValue( mibbles ),
-								() -> assertThat( err ).isNull()
-						) );
+										() -> assertThat( err ).isNull()
+								) );
 			} );
 		} );
 	}

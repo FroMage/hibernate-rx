@@ -5,8 +5,8 @@ import java.util.concurrent.CompletionStage;
 import org.hibernate.rx.RxSession;
 import org.hibernate.rx.service.RxConnection;
 import org.hibernate.rx.service.initiator.RxConnectionPoolProvider;
-import org.hibernate.rx.sql.exec.spi.RxMutation;
-import org.hibernate.rx.sql.exec.spi.RxParameterBinder;
+import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
+import org.hibernate.rx.sql.ast.consume.spi.RxParameterBinder;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 
 import io.reactiverse.pgclient.PgConnection;
@@ -15,7 +15,7 @@ import io.reactiverse.pgclient.impl.ArrayTuple;
 
 public class RxMutationExecutor {
 
-	public void execute(RxMutation operation, ExecutionContext executionContext, CompletionStage<?> operationStage) {
+	public void execute(RxOperation operation, ExecutionContext executionContext, CompletionStage<?> operationStage) {
 //		Just the insert for now
 		final RxSession rxSession = (RxSession) executionContext.getSession();
 		RxConnectionPoolProvider poolProvider = reactivePoolProvider( executionContext );
@@ -46,7 +46,7 @@ public class RxMutationExecutor {
 		} );
 	}
 
-	private ArrayTuple parameters(RxMutation operation) {
+	private ArrayTuple parameters(RxOperation operation) {
 		ArrayTuple tuple = new ArrayTuple( operation.getParameterBinders().size() );
 		for ( RxParameterBinder param : operation.getParameterBinders() ) {
 			tuple.addValue( param.getBindValue() );

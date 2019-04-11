@@ -1,6 +1,6 @@
 package org.hibernate.rx.impl;
 
-import org.hibernate.rx.sql.exec.spi.RxParameterBinder;
+import org.hibernate.rx.sql.ast.consume.spi.RxParameterBinder;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.consume.spi.SqlAstWalker;
 import org.hibernate.sql.ast.tree.spi.expression.GenericParameter;

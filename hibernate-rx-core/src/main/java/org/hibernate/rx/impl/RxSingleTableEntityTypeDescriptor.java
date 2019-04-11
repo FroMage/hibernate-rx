@@ -15,7 +15,7 @@ import org.hibernate.metamodel.model.domain.spi.IdentifiableTypeDescriptor;
 import org.hibernate.metamodel.model.relational.spi.Column;
 import org.hibernate.query.internal.QueryOptionsImpl;
 import org.hibernate.query.spi.QueryOptions;
-import org.hibernate.rx.sql.exec.spi.RxMutation;
+import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.consume.spi.SqlDeleteToJdbcDeleteConverter;
@@ -256,14 +256,14 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 	}
 
 	private void executeOperation(ExecutionContext executionContext, InsertStatement insertStatement, CompletionStage<?> operationStage) {
-		RxMutation mutation = InsertToRxInsertConverter.createRxInsert( insertStatement, executionContext.getSession().getSessionFactory() );
+		RxOperation mutation = InsertToRxInsertConverter.createRxInsert( insertStatement, executionContext.getSession().getSessionFactory() );
 		RxMutationExecutor executor = new RxMutationExecutor();
 		executor.execute( mutation, executionContext, operationStage );
 	}
 
 
 	private void executeOperation(ExecutionContext executionContext, DeleteStatement deleteStatement, CompletionStage<?> operationStage) {
-		RxMutation mutation = DeleteToRxDeleteConverter.createRxDelete( deleteStatement, executionContext.getSession().getSessionFactory() );
+		RxOperation mutation = DeleteToRxDeleteConverter.createRxDelete( deleteStatement, executionContext.getSession().getSessionFactory() );
 		RxMutationExecutor executor = new RxMutationExecutor();
 		executor.execute( mutation, executionContext, operationStage );
 	}

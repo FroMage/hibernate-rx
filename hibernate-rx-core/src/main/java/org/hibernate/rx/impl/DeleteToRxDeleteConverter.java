@@ -7,8 +7,8 @@ import java.util.Set;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.model.relational.spi.PhysicalTable;
-import org.hibernate.rx.sql.exec.spi.RxMutation;
-import org.hibernate.rx.sql.exec.spi.RxParameterBinder;
+import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
+import org.hibernate.rx.sql.ast.consume.spi.RxParameterBinder;
 import org.hibernate.sql.ast.consume.spi.AbstractSqlAstToJdbcOperationConverter;
 import org.hibernate.sql.ast.consume.spi.SqlMutationToJdbcMutationConverter;
 import org.hibernate.sql.ast.tree.spi.DeleteStatement;
@@ -67,11 +67,11 @@ public class DeleteToRxDeleteConverter extends AbstractSqlAstToJdbcOperationConv
 		return rxParameterBinders;
 	}
 
-	public static RxMutation createRxDelete(DeleteStatement statement, SessionFactoryImplementor sessionFactory) {
+	public static RxOperation createRxDelete(DeleteStatement statement, SessionFactoryImplementor sessionFactory) {
 		final DeleteToRxDeleteConverter walker = new DeleteToRxDeleteConverter( sessionFactory, statement );
 		walker.processDeleteStatement( statement );
 		// TODO: Create specific class for insert? Ex: InsertRxMutation
-		return new RxMutation() {
+		return new RxOperation() {
 			@Override
 			public String getSql() {
 				return walker.getSql();
