@@ -17,18 +17,17 @@ import org.hibernate.cache.spi.QueryResultsCache;
 import org.hibernate.loader.spi.AfterLoadAction;
 import org.hibernate.query.internal.ScrollableResultsIterator;
 import org.hibernate.query.spi.ScrollableResultsImplementor;
-import org.hibernate.sql.exec.internal.Helper;
+import org.hibernate.rx.sql.ast.consume.spi.RxSelect;
+import org.hibernate.rx.sql.exec.spi.RxSelectExecutor;
+import org.hibernate.rx.sql.results.internal.values.DeferredResultSetAccess;
 import org.hibernate.sql.exec.internal.ListResultsConsumer;
 import org.hibernate.sql.exec.internal.ResultsConsumer;
 import org.hibernate.sql.exec.internal.ScrollableResultsConsumer;
 import org.hibernate.sql.exec.spi.ExecutionContext;
-import org.hibernate.sql.exec.spi.JdbcSelect;
-import org.hibernate.sql.exec.spi.JdbcSelectExecutor;
 import org.hibernate.sql.exec.spi.PreparedStatementCreator;
 import org.hibernate.sql.exec.spi.RowTransformer;
 import org.hibernate.sql.results.internal.JdbcValuesSourceProcessingStateStandardImpl;
 import org.hibernate.sql.results.internal.RowProcessingStateStandardImpl;
-import org.hibernate.sql.results.internal.values.DeferredResultSetAccess;
 import org.hibernate.sql.results.internal.values.JdbcValues;
 import org.hibernate.sql.results.internal.values.JdbcValuesCacheHit;
 import org.hibernate.sql.results.internal.values.JdbcValuesResultSetImpl;
@@ -42,7 +41,7 @@ import org.jboss.logging.Logger;
 /**
  * See {@link org.hibernate.sql.exec.internal.JdbcSelectExecutorStandardImpl}
  */
-public class RxSelectExecutorStandard implements JdbcSelectExecutor {
+public class RxSelectExecutorStandard implements RxSelectExecutor {
 	// todo (6.0) : Make resolving these executors swappable - JdbcServices?
 	//		Since JdbcServices is just a "composition service", this is actually
 	//		a very good option...
@@ -59,11 +58,11 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 
 	@Override
 	public <R> List<R> list(
-			JdbcSelect jdbcSelect,
+			RxSelect rxSelect,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer) {
 		return executeQuery(
-				jdbcSelect,
+				rxSelect,
 				executionContext,
 				rowTransformer,
 				Connection::prepareStatement,
@@ -73,12 +72,12 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 
 	@Override
 	public <R> ScrollableResultsImplementor<R> scroll(
-			JdbcSelect jdbcSelect,
+			RxSelect rxSelect,
 			ScrollMode scrollMode,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer) {
 		return executeQuery(
-				jdbcSelect,
+				rxSelect,
 				executionContext,
 				rowTransformer,
 				(connection, sql) -> connection.prepareStatement(
@@ -93,11 +92,11 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 
 	@Override
 	public <R> Stream<R> stream(
-			JdbcSelect jdbcSelect,
+			RxSelect rxSelect,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer) {
 		final ScrollableResultsImplementor<R> scrollableResults = scroll(
-				jdbcSelect,
+				rxSelect,
 				ScrollMode.FORWARD_ONLY,
 				executionContext,
 				rowTransformer
@@ -111,21 +110,20 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 
 	private enum ExecuteAction {
 		EXECUTE_QUERY,
-
 	}
 
 	private <T, R> T executeQuery(
-			JdbcSelect jdbcSelect,
+			RxSelect rxSelect,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer,
 			PreparedStatementCreator statementCreator,
 			ResultsConsumer<T,R> resultsConsumer) {
 
 		final JdbcValues jdbcValues = resolveJdbcValuesSource(
-				jdbcSelect,
+				rxSelect,
 				executionContext,
 				new DeferredResultSetAccess(
-						jdbcSelect,
+						rxSelect,
 						executionContext,
 						statementCreator
 				)
@@ -194,7 +192,7 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 
 	@SuppressWarnings("unchecked")
 	private JdbcValues resolveJdbcValuesSource(
-			JdbcSelect jdbcSelect,
+			RxSelect rxSelect,
 			ExecutionContext executionContext,
 			ResultSetAccess resultSetAccess) {
 		final List<Object[]> cachedResults;
@@ -202,7 +200,7 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 		final boolean queryCacheEnabled = executionContext.getSession().getFactory().getSessionFactoryOptions().isQueryCacheEnabled();
 		final CacheMode cacheMode = resolveCacheMode(  executionContext );
 
-		final ResultSetMapping resultSetMapping = jdbcSelect.getResultSetMapping()
+		final ResultSetMapping resultSetMapping = rxSelect.getResultSetMappingDescriptor()
 				.resolve( resultSetAccess, executionContext.getSession().getSessionFactory() );
 
 		final QueryKey queryResultsCacheKey;
@@ -221,7 +219,7 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 			// todo (6.0) : relatedly ^^, pretty sure that SqlSelections are also irrelevant
 
 			queryResultsCacheKey = QueryKey.from(
-					jdbcSelect.getSql(),
+					rxSelect.getSql(),
 					executionContext.getQueryOptions().getLimit(),
 					executionContext.getParameterBindingContext().getQueryParameterBindings(),
 					executionContext.getSession()
@@ -232,7 +230,7 @@ public class RxSelectExecutorStandard implements JdbcSelectExecutor {
 					queryResultsCacheKey,
 					// todo (6.0) : `querySpaces` and `session` make perfect sense as args, but its odd passing those into this method just to pass along
 					//		atm we do not even collect querySpaces, but we need to
-					jdbcSelect.getAffectedTableNames(),
+					rxSelect.getAffectedTableNames(),
 					executionContext.getSession()
 			);
 

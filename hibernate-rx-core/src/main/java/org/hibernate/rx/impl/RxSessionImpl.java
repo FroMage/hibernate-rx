@@ -7,6 +7,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.persistence.CacheRetrieveMode;
 import javax.persistence.CacheStoreMode;
@@ -30,6 +32,7 @@ import org.hibernate.Session;
 import org.hibernate.TypeMismatchException;
 import org.hibernate.engine.spi.ActionQueue;
 import org.hibernate.engine.spi.ExceptionConverter;
+import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionDelegatorBaseImpl;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
@@ -59,11 +62,12 @@ import org.hibernate.resource.transaction.spi.TransactionCoordinator;
 import org.hibernate.resource.transaction.spi.TransactionStatus;
 import org.hibernate.rx.RxQuery;
 import org.hibernate.rx.RxSession;
-import org.hibernate.rx.engine.spi.RxActionQueue;
 import org.hibernate.rx.engine.spi.RxHibernateSessionFactoryImplementor;
-import org.hibernate.rx.event.RxLoadEvent;
 import org.hibernate.rx.event.RxDeleteEvent;
+import org.hibernate.rx.event.RxLoadEvent;
 import org.hibernate.rx.event.RxPersistEvent;
+
+import net.bytebuddy.implementation.bytecode.Throw;
 
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_RETRIEVE_MODE;
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_STORE_MODE;
@@ -76,7 +80,6 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	private final RxHibernateSessionFactoryImplementor factory;
 	private final ExceptionConverter exceptionConverter;
 	private final ExceptionMapper exceptionMapper = ExceptionMapperStandardImpl.INSTANCE;
-	private transient RxActionQueue rxActionQueue;
 	private transient boolean disallowOutOfTransactionUpdateOperations;
 
 
@@ -84,7 +87,6 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		super( delegate );
 		this.disallowOutOfTransactionUpdateOperations = !factory.getSessionFactoryOptions()
 				.isAllowOutOfTransactionUpdateOperations();
-		this.rxActionQueue = new RxActionQueue( this );
 		this.factory = factory;
 		this.exceptionConverter = delegate.getExceptionConverter();
 		this.executor = ForkJoinPool.commonPool();
@@ -93,11 +95,6 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	@Override
 	public Executor getExecutor() {
 		return executor;
-	}
-
-	@Override
-	public ActionQueue getActionQueue() {
-		return getRxActionQueue();
 	}
 
 	@Override
@@ -131,13 +128,34 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	}
 
 	@Override
-	public RxActionQueue getRxActionQueue() {
-		return rxActionQueue;
+	public <R> RxQuery<R> createQuery(Class<R> resultType, String jpql) {
+		return null;
 	}
 
 	@Override
-	public <R> RxQuery<R> createQuery(Class<R> resultType, String jpql) {
-		return null;
+	public CompletionStage<Void> inTransaction(final Function<EntityTransaction, CompletionStage<Void>> consumer) {
+		CompletableFuture txStage = new CompletableFuture();
+		executor.execute( () -> {
+			try {
+				final EntityTransaction tx = beginTransaction();
+				try {
+					consumer.apply( tx )
+							.exceptionally(  err -> { txStage.completeExceptionally( err ); return null; } )
+							.thenAccept( ignore -> {
+								tx.commit();
+								txStage.complete( null );
+							} );
+				}
+				catch (Throwable t) {
+					txStage.completeExceptionally( t );
+					tx.rollback();
+				}
+			}
+			catch (Throwable t) {
+				txStage.completeExceptionally( t );
+			}
+		} );
+		return txStage;
 	}
 
 	@Override
@@ -180,6 +198,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		executor.execute( () -> {
 			checkOpen();
 			firePersist( new RxPersistEvent( null, object, this, persistStage ) );
+			flush();
 		} );
 		return persistStage;
 	}
@@ -193,6 +212,11 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 					}
 					throw exceptionConverter.convert( (RuntimeException) e );
 				} );
+	}
+
+	@Override
+	public PersistenceContext getPersistenceContext() {
+		return super.getPersistenceContext();
 	}
 
 	public CompletionStage<Void> deleteAsync(String entityName, Object object) throws HibernateException {
@@ -211,8 +235,6 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		executor.execute( () -> {
 			checkOpen();
 			fireDelete( new RxDeleteEvent( object, this, deleteStage ) );
-			// At the moment we don't support tx;
-			flush();
 		} );
 		return deleteStage;
 	}

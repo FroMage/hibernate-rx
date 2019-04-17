@@ -13,6 +13,7 @@ import io.reactiverse.pgclient.PgConnection;
 import io.reactiverse.pgclient.PgPool;
 import io.reactiverse.pgclient.PgResult;
 import io.reactiverse.pgclient.PgRowSet;
+import io.reactiverse.pgclient.Tuple;
 import io.reactiverse.pgclient.impl.ArrayTuple;
 
 public class RxMutationExecutor {
@@ -25,7 +26,7 @@ public class RxMutationExecutor {
 		connection.unwrap( PgPool.class ).getConnection( ar1 -> {
 			if ( ar1.succeeded() ) {
 				PgConnection pgConnection = ar1.result();
-				ArrayTuple tuple = parameters( operation );
+				Tuple tuple = parameters( operation );
 				pgConnection.preparedQuery(
 						operation.getSql(),
 						tuple,

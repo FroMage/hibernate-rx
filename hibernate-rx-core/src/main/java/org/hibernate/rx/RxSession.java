@@ -4,15 +4,17 @@ import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import javax.persistence.EntityTransaction;
 
-import org.hibernate.HibernateException;
 import org.hibernate.Session;
-import org.hibernate.rx.engine.spi.RxActionQueue;
 
 public interface RxSession extends Session {
 
 	@Override
 	RxHibernateSessionFactory getSessionFactory();
+
+	CompletionStage<Void> inTransaction(final Function<EntityTransaction, CompletionStage<Void>> consumer);
 
 	CompletionStage<Void> persistAsync(Object entity);
 
@@ -23,8 +25,6 @@ public interface RxSession extends Session {
 	<T> CompletionStage<Optional<T>> findAsync(Class<T> type, Object id);
 
 	<R> RxQuery<R> createQuery(Class<R> resultType, String jpql);
-
-	RxActionQueue getRxActionQueue();
 
 	CompletionStage<Void> removeAsync(Object entity);
 

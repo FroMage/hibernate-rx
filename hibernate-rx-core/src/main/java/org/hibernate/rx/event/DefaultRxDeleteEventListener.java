@@ -224,7 +224,7 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 			cascadeAfterDelete( source, entityDescriptor, entity, transientEntities );
 		} );
 
-		source.unwrap( RxSession.class ).getRxActionQueue().addAction(
+		source.getActionQueue().addAction(
 				new RxEntityDeleteAction(
 						entityEntry.getId(),
 						deletedState,

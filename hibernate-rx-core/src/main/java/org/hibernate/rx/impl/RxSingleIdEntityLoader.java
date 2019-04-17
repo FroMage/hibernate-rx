@@ -20,11 +20,12 @@ import org.hibernate.query.NavigablePath;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.query.spi.QueryParameterBindings;
 import org.hibernate.rx.RxSession;
+import org.hibernate.rx.sql.ast.consume.spi.RxSelect;
+import org.hibernate.rx.sql.ast.consume.spi.SqlAstSelectToRxSelectConverter;
 import org.hibernate.rx.sql.exec.internal.RxSelectExecutorStandard;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.JoinType;
-import org.hibernate.sql.ast.consume.spi.SqlAstSelectToJdbcSelectConverter;
 import org.hibernate.sql.ast.produce.internal.SqlAstSelectDescriptorImpl;
 import org.hibernate.sql.ast.produce.metamodel.internal.LoadIdParameter;
 import org.hibernate.sql.ast.produce.metamodel.internal.SelectByEntityIdentifierBuilder;
@@ -47,7 +48,6 @@ import org.hibernate.sql.ast.tree.spi.predicate.Predicate;
 import org.hibernate.sql.ast.tree.spi.predicate.RelationalPredicate;
 import org.hibernate.sql.ast.tree.spi.select.SelectClause;
 import org.hibernate.sql.exec.internal.JdbcParameterBindingsImpl;
-import org.hibernate.sql.exec.internal.JdbcSelectExecutorStandardImpl;
 import org.hibernate.sql.exec.internal.LoadParameterBindingContext;
 import org.hibernate.sql.exec.internal.RowTransformerPassThruImpl;
 import org.hibernate.sql.exec.internal.RowTransformerSingularReturnImpl;
@@ -55,7 +55,6 @@ import org.hibernate.sql.exec.internal.StandardJdbcParameterImpl;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcParameterBinding;
 import org.hibernate.sql.exec.spi.JdbcParameterBindings;
-import org.hibernate.sql.exec.spi.JdbcSelect;
 import org.hibernate.sql.exec.spi.ParameterBindingContext;
 import org.hibernate.sql.results.internal.SqlSelectionImpl;
 import org.hibernate.sql.results.internal.domain.basic.BasicResultImpl;
@@ -69,8 +68,8 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 	private final SqlAstSelectDescriptor databaseSnapshotSelectAst;
 	private LoadIdParameter idParameter;
 
-	private EnumMap<LockMode, JdbcSelect> selectByLockMode = new EnumMap<>( LockMode.class );
-	private EnumMap<LoadQueryInfluencers.InternalFetchProfileType,JdbcSelect> selectByInternalCascadeProfile;
+	private EnumMap<LockMode, RxSelect> selectByLockMode = new EnumMap<>( LockMode.class );
+	private EnumMap<LoadQueryInfluencers.InternalFetchProfileType, RxSelect> selectByInternalCascadeProfile;
 
 	public RxSingleIdEntityLoader(EntityTypeDescriptor<T> entityDescriptor) {
 		super( entityDescriptor );
@@ -110,7 +109,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 				id
 		);
 
-		final JdbcSelect jdbcSelect = resolveJdbcSelect(
+		final RxSelect jdbcSelect = resolveRxSelect(
 				lockOptions,
 				session
 		);
@@ -195,7 +194,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 		return jdbcParameterBindings;
 	}
 
-	private JdbcSelect resolveJdbcSelect(
+	private RxSelect resolveRxSelect(
 			LockOptions lockOptions,
 			SharedSessionContractImplementor session) {
 		final LoadQueryInfluencers loadQueryInfluencers = session.getLoadQueryInfluencers();
@@ -205,7 +204,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 			// This case is special because the filters need to be applied in order to
 			// 		properly restrict the SQL/JDBC results.  For this reason it has higher
 			// 		precedence than even "internal" fetch profiles.
-			return createJdbcSelect( lockOptions, loadQueryInfluencers, session.getSessionFactory() );
+			return createRxSelect( lockOptions, loadQueryInfluencers, session.getSessionFactory() );
 		}
 
 		if ( loadQueryInfluencers.getEnabledInternalFetchProfileType() != null ) {
@@ -215,7 +214,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 				}
 				return selectByInternalCascadeProfile.computeIfAbsent(
 						loadQueryInfluencers.getEnabledInternalFetchProfileType(),
-						internalFetchProfileType -> createJdbcSelect( lockOptions, loadQueryInfluencers, session.getSessionFactory() )
+						internalFetchProfileType -> createRxSelect( lockOptions, loadQueryInfluencers, session.getSessionFactory() )
 				);
 			}
 		}
@@ -228,11 +227,11 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 		if ( cacheable ) {
 			return selectByLockMode.computeIfAbsent(
 					lockOptions.getLockMode(),
-					lockMode -> createJdbcSelect( lockOptions, loadQueryInfluencers, session.getSessionFactory() )
+					lockMode -> createRxSelect( lockOptions, loadQueryInfluencers, session.getSessionFactory() )
 			);
 		}
 
-		return createJdbcSelect(
+		return createRxSelect(
 				lockOptions,
 				loadQueryInfluencers,
 				session.getSessionFactory()
@@ -240,7 +239,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 
 	}
 
-	private JdbcSelect createJdbcSelect(
+	private RxSelect createRxSelect(
 			LockOptions lockOptions,
 			LoadQueryInfluencers queryInfluencers,
 			SessionFactoryImplementor sessionFactory) {
@@ -252,7 +251,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 				.generateSelectStatement( 1, queryInfluencers, lockOptions );
 
 
-		return SqlAstSelectToJdbcSelectConverter.interpret(
+		return SqlAstSelectToRxSelectConverter.interpret(
 				selectDescriptor,
 				sessionFactory
 		);
@@ -274,13 +273,13 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 	@Override
 	public Object[] loadDatabaseSnapshot(Object id, SharedSessionContractImplementor session) {
 
-		final JdbcSelect jdbcSelect = SqlAstSelectToJdbcSelectConverter.interpret(
+		final RxSelect rxSelect = SqlAstSelectToRxSelectConverter.interpret(
 				databaseSnapshotSelectAst,
 				session.getSessionFactory()
 		);
 
-		final List<T> list = JdbcSelectExecutorStandardImpl.INSTANCE.list(
-				jdbcSelect,
+		final List<T> list = RxSelectExecutorStandard.INSTANCE.list(
+				rxSelect,
 				getExecutionContext( id, session ),
 				RowTransformerPassThruImpl.instance()
 		);

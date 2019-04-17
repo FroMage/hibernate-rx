@@ -13,7 +13,6 @@ import org.hibernate.rx.event.DefaultRxDeleteEventListener;
 import org.hibernate.rx.event.DefaultRxLoadEventListener;
 import org.hibernate.rx.event.DefaultRxPersistEventListener;
 import org.hibernate.rx.event.DefaultRxPersistOnFlushEventListener;
-import org.hibernate.rx.event.DefaultRxFlushEventListener;
 import org.hibernate.service.spi.SessionFactoryServiceRegistry;
 
 public class RxIntegrator implements Integrator {
@@ -34,7 +33,6 @@ public class RxIntegrator implements Integrator {
 		EventListenerRegistry eventListenerRegistry = serviceRegistry.getService( EventListenerRegistry.class );
 
 		eventListenerRegistry.addDuplicationStrategy( DefaultRxPersistEventListener.EventContextManagingPersistEventListenerDuplicationStrategy.INSTANCE );
-//		eventListenerRegistry.addDuplicationStrategy( DefaultRxFlushEventListener.EventContextManagingFlushEventListenerDuplicationStrategy.INSTANCE );
 		eventListenerRegistry.addDuplicationStrategy( DefaultRxDeleteEventListener.EventContextManagingDeleteEventListenerDuplicationStrategy.INSTANCE );
 		eventListenerRegistry.addDuplicationStrategy( DefaultRxLoadEventListener.EventContextManagingLoadEventListenerDuplicationStrategy.INSTANCE );
 
@@ -42,6 +40,5 @@ public class RxIntegrator implements Integrator {
 		eventListenerRegistry.getEventListenerGroup( EventType.DELETE).appendListener( new DefaultRxDeleteEventListener() );
 		eventListenerRegistry.getEventListenerGroup( EventType.PERSIST ).appendListener( new DefaultRxPersistEventListener() );
 		eventListenerRegistry.getEventListenerGroup( EventType.PERSIST_ONFLUSH ).appendListener( new DefaultRxPersistOnFlushEventListener() );
-//		eventListenerRegistry.getEventListenerGroup( EventType.FLUSH ).appendListener( new DefaultRxFlushEventListener() );
 	}
 }

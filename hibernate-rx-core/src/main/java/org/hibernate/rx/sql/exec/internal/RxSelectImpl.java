@@ -17,13 +17,13 @@ import org.hibernate.sql.results.spi.ResultSetMappingDescriptor;
 public class RxSelectImpl implements RxSelect {
 	private final String sql;
 	private final List<RxParameterBinder> parameterBinders;
-	private final PgResultMappingDescriptor resultDescriptor;
+	private final ResultSetMappingDescriptor resultDescriptor;
 	private final Set<String> affectedTableNames;
 
 	public RxSelectImpl(
 			String sql,
 			List<RxParameterBinder> parameterBinders,
-			PgResultMappingDescriptor resultDescriptor,
+			ResultSetMappingDescriptor resultDescriptor,
 			Set<String> affectedTableNames) {
 		this.sql = sql;
 		this.parameterBinders = parameterBinders;
@@ -48,7 +48,7 @@ public class RxSelectImpl implements RxSelect {
 	}
 
 	@Override
-	public PgResultMappingDescriptor getPgResultMappingDescriptor() {
-		return null;
+	public ResultSetMappingDescriptor getResultSetMappingDescriptor() {
+		return resultDescriptor;
 	}
 }

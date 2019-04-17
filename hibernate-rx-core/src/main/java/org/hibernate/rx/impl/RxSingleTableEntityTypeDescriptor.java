@@ -2,10 +2,13 @@ package org.hibernate.rx.impl;
 
 import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
 import org.hibernate.boot.model.domain.EntityMapping;
+import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.internal.TemplateParameterBindingContext;
 import org.hibernate.metamodel.model.creation.spi.RuntimeModelCreationContext;
@@ -15,6 +18,7 @@ import org.hibernate.metamodel.model.domain.spi.IdentifiableTypeDescriptor;
 import org.hibernate.metamodel.model.relational.spi.Column;
 import org.hibernate.query.internal.QueryOptionsImpl;
 import org.hibernate.query.spi.QueryOptions;
+import org.hibernate.rx.event.CompletionStageExtraState;
 import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
 import org.hibernate.rx.sql.ast.consume.spi.SqlInsertToRxInsertConverter;
 import org.hibernate.sql.SqlExpressableType;
@@ -128,21 +132,22 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 		executeOperation( executionContext, deleteStatement, deleteStage );
 	}
 
+	@Override
 	public void insert(
-			Object id,
-			Object[] fields,
-			Object object,
-			SharedSessionContractImplementor session,
-			CompletionStage<Void> stage) {
-		insertInternal( id, fields, object, session, stage);
+			Object id, Object[] fields, Object object, SharedSessionContractImplementor session) {
+		EntityEntry entry = session.getPersistenceContext().getEntry( object );
+		super.insert( id, fields, object, session );
 	}
 
 	@Override
-	public Object insert(
+	protected Object insertInternal(
+			Object id,
 			Object[] fields,
 			Object object,
 			SharedSessionContractImplementor session) {
-		throw new UnsupportedOperationException( "You need to pass a callable future!" );
+		EntityEntry entry = session.getPersistenceContext().getEntry( object );
+		CompletionStageExtraState extraState = entry.getExtraState( CompletionStageExtraState.class );
+		return insertInternal( id, fields, object, session, (CompletionStage<Void>) extraState.getStage() );
 	}
 
 	protected Object insertInternal(

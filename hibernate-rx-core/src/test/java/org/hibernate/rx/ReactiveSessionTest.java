@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
+import javax.persistence.CascadeType;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
 import javax.persistence.Id;
@@ -80,14 +81,16 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		final GuineaPig mibbles = new GuineaPig( 22, "Mibbles" );
 
 		CompletionStage<Void> persistStage = session.persistAsync( mibbles );
-
-		persistStage.whenComplete( (nothing, err) -> {
-			assertAsync( testContext, () ->
-					assertAll(
-							() -> assertThat( nothing ).isNull(),
-							() -> assertThat( err ).isNull()
-					) );
-		} );
+		persistStage
+				.exceptionally( err -> {
+					testContext.failNow( err );
+					return null;
+				} )
+				.thenAccept( nothing -> {
+					assertAsync( testContext, () -> {
+						assertThat( nothing ).isNull();
+					} );
+				} );
 	}
 
 	@Test
@@ -142,28 +145,20 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 
 	@Test
 	public void testAssociation(VertxTestContext testContext) throws Exception {
-		GuineaPig kirby = new GuineaPig( 225, "Kirby" );
-		GuineaPig thor = new GuineaPig( 221, "Thor", kirby );
-		GuineaPig tony = new GuineaPig( 222, "Tony", kirby );
-		GuineaPig hulk = new GuineaPig( 223, "Hulk", kirby );
-		GuineaPig steve = new GuineaPig( 224, "Steven", kirby );
+		GuineaPig fury = new GuineaPig( 225, "Fury" );
+		GuineaPig thor = new GuineaPig( 221, "Thor", fury );
+		GuineaPig tony = new GuineaPig( 222, "Tony", fury );
+		GuineaPig hulk = new GuineaPig( 223, "Hulk", fury );
+		GuineaPig steve = new GuineaPig( 224, "Steven", fury );
 
 		List<GuineaPig> avengers = Arrays.asList( thor, tony, hulk, steve );
+		fury.setChildren( avengers );
 
-		List<CompletableFuture<Void>> allStages = avengers.stream()
-				.map( avenger -> {
-					return session.persistAsync( avenger ).toCompletableFuture();
-				} )
-				.collect( Collectors.toList() );
-
-		allStages.add( 0, session.persistAsync( kirby ).toCompletableFuture() );
-
-		session.flush();
-
-		allOf( allStages.toArray( new CompletableFuture[allStages.size()] ) )
+		session.persistAsync( fury )
 				.exceptionally( err -> { testContext.failNow( err ); return null; } )
 				.thenAccept( ignore -> {
 					testContext.completeNow();
+					System.out.println( "!Done!" );
 				} );
 	}
 
@@ -200,7 +195,7 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		private Integer id;
 		private String name;
 
-		@OneToMany(mappedBy = "father", fetch = FetchType.EAGER)
+		@OneToMany(mappedBy = "father", cascade = CascadeType.PERSIST)
 		private List<GuineaPig> children = new ArrayList<>();
 
 		@ManyToOne

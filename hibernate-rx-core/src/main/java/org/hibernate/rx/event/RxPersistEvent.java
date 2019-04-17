@@ -23,7 +23,6 @@ public class RxPersistEvent extends PersistEvent {
 		this.stage = stage;
 	}
 
-
 	public void complete() {
 		stage.toCompletableFuture().complete( null );
 	}

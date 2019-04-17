@@ -1,7 +1,7 @@
 package org.hibernate.rx.sql.ast.consume.spi;
 
-import io.reactiverse.pgclient.PgResult;
+import org.hibernate.sql.results.spi.ResultSetMappingDescriptor;
 
 public interface RxSelect extends RxOperation {
-	PgResultMappingDescriptor getPgResultMappingDescriptor();
+	ResultSetMappingDescriptor getResultSetMappingDescriptor();
 }

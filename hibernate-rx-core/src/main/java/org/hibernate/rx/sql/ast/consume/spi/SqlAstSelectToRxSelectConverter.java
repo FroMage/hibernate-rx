@@ -6,18 +6,25 @@
  */
 package org.hibernate.rx.sql.ast.consume.spi;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.sql.ast.consume.spi.AbstractSqlAstToJdbcOperationConverter;
+import org.hibernate.rx.sql.exec.internal.RxSelectImpl;
 import org.hibernate.sql.ast.consume.spi.SqlSelectAstWalker;
 import org.hibernate.sql.ast.produce.spi.SqlAstSelectDescriptor;
 import org.hibernate.sql.ast.tree.spi.QuerySpec;
 import org.hibernate.sql.ast.tree.spi.SelectStatement;
 import org.hibernate.sql.exec.internal.JdbcSelectImpl;
 import org.hibernate.sql.exec.internal.StandardResultSetMappingDescriptor;
+import org.hibernate.sql.exec.spi.ExecutionContext;
+import org.hibernate.sql.exec.spi.JdbcParameterBinder;
+import org.hibernate.sql.exec.spi.JdbcParameterBinding;
 import org.hibernate.sql.exec.spi.JdbcSelect;
 import org.hibernate.type.descriptor.spi.SqlTypeDescriptorIndicators;
+
+import io.reactiverse.pgclient.PgPreparedQuery;
 
 /**
  * The final phase of query translation.  Here we take the SQL-AST an
@@ -25,19 +32,22 @@ import org.hibernate.type.descriptor.spi.SqlTypeDescriptorIndicators;
  * {@link RxSelect}.
  */
 public class SqlAstSelectToRxSelectConverter
-		extends AbstractSqlAstToJdbcOperationConverter
+		extends AbstractSqlAstToRxOperationConverter
 		implements SqlSelectAstWalker, SqlTypeDescriptorIndicators {
+
+	private final List<RxParameterBinder> rxParameterBinders = new ArrayList<>( 0 );
+
 	/**
 	 * Perform interpretation of a select query, returning the SqlSelectInterpretation
 	 *
 	 * @return The interpretation result
 	 */
-	public static JdbcSelect interpret(QuerySpec querySpec, SessionFactoryImplementor sessionFactory) {
+	public static RxSelect interpret(QuerySpec querySpec, SessionFactoryImplementor sessionFactory) {
 		final SqlAstSelectToRxSelectConverter walker = new SqlAstSelectToRxSelectConverter( sessionFactory );
 		walker.visitQuerySpec( querySpec );
-		return new JdbcSelectImpl(
+		return new RxSelectImpl(
 				walker.getSql(),
-				walker.getParameterBinders(),
+				walker.getRxParameterBinders(),
 				new StandardResultSetMappingDescriptor(
 						querySpec.getSelectClause().getSqlSelections(),
 						Collections.emptyList()
@@ -46,13 +56,13 @@ public class SqlAstSelectToRxSelectConverter
 		);
 	}
 
-	public static JdbcSelect interpret(SqlAstSelectDescriptor sqlSelectPlan, SessionFactoryImplementor sessionFactory) {
+	public static RxSelect interpret(SqlAstSelectDescriptor sqlSelectPlan, SessionFactoryImplementor sessionFactory) {
 		final SqlAstSelectToRxSelectConverter walker = new SqlAstSelectToRxSelectConverter( sessionFactory );
 
 		walker.visitSelectQuery( sqlSelectPlan.getSqlAstStatement() );
-		return new JdbcSelectImpl(
+		return new RxSelectImpl(
 				walker.getSql(),
-				walker.getParameterBinders(),
+				walker.getRxParameterBinders(),
 				new StandardResultSetMappingDescriptor(
 						sqlSelectPlan.getSqlAstStatement().getQuerySpec().getSelectClause().getSqlSelections(),
 						sqlSelectPlan.getQueryResults()
@@ -65,8 +75,32 @@ public class SqlAstSelectToRxSelectConverter
 		super( sessionFactory );
 	}
 
+	public List<RxParameterBinder> getRxParameterBinders() {
+		return rxParameterBinders;
+	}
+
 	@Override
 	public void visitSelectQuery(SelectStatement selectQuery) {
 		visitQuerySpec( selectQuery.getQuerySpec() );
+	}
+
+	@Override
+	protected void visitJdbcParameterBinder(JdbcParameterBinder jdbcParameterBinder) {
+		super.visitJdbcParameterBinder( jdbcParameterBinder  );
+
+		RxParameterBinder rxBinder = new RxParameterBinder() {
+			@Override
+			public int bindParameterValue(
+					PgPreparedQuery statement, int startPosition, ExecutionContext executionContext) {
+				return 1;
+			}
+
+			@Override
+			public Object getBindValue() {
+				return null;
+			}
+		};
+
+		rxParameterBinders.add( rxBinder );
 	}
 }
