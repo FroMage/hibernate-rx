@@ -7,7 +7,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.persistence.CacheRetrieveMode;
@@ -30,7 +29,6 @@ import org.hibernate.ObjectDeletedException;
 import org.hibernate.ObjectNotFoundException;
 import org.hibernate.Session;
 import org.hibernate.TypeMismatchException;
-import org.hibernate.engine.spi.ActionQueue;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionDelegatorBaseImpl;
@@ -43,8 +41,6 @@ import org.hibernate.event.spi.DeleteEvent;
 import org.hibernate.event.spi.DeleteEventListener;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
-import org.hibernate.event.spi.FlushEvent;
-import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.event.spi.LoadEvent;
 import org.hibernate.event.spi.LoadEventListener;
 import org.hibernate.event.spi.PersistEvent;
@@ -57,6 +53,7 @@ import org.hibernate.internal.ExceptionMapperStandardImpl;
 import org.hibernate.internal.HEMLogging;
 import org.hibernate.jpa.internal.util.CacheModeHelper;
 import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
+import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorImpl;
 import org.hibernate.resource.transaction.backend.jta.internal.synchronization.ExceptionMapper;
 import org.hibernate.resource.transaction.spi.TransactionCoordinator;
 import org.hibernate.resource.transaction.spi.TransactionStatus;
@@ -66,8 +63,6 @@ import org.hibernate.rx.engine.spi.RxHibernateSessionFactoryImplementor;
 import org.hibernate.rx.event.RxDeleteEvent;
 import org.hibernate.rx.event.RxLoadEvent;
 import org.hibernate.rx.event.RxPersistEvent;
-
-import net.bytebuddy.implementation.bytecode.Throw;
 
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_RETRIEVE_MODE;
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_STORE_MODE;
@@ -198,7 +193,6 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		executor.execute( () -> {
 			checkOpen();
 			firePersist( new RxPersistEvent( null, object, this, persistStage ) );
-			flush();
 		} );
 		return persistStage;
 	}
@@ -279,13 +273,26 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		}
 	}
 
+	private void checkNoUnresolvedActionsAfterOperation() {
+		if ( getPersistenceContext().getCascadeLevel() == 0 ) {
+			getActionQueue().checkNoUnresolvedActionsAfterOperation();
+		}
+		delayedAfterCompletion();
+	}
+
+	protected void checkOpenOrWaitingForAutoClose() {
+		if ( !waitingForAutoClose ) {
+			checkOpen();
+		}
+	}
+
 	private void fireLoad(LoadEvent event, LoadEventListener.LoadType loadType) {
-//		checkOpenOrWaitingForAutoClose();
-//		checkTransactionSynchStatus();
+		checkOpenOrWaitingForAutoClose();
+		checkTransactionSynchStatus();
 		for ( LoadEventListener listener : listeners( EventType.LOAD ) ) {
 			listener.onLoad( event, loadType );
 		}
-//		delayedAfterCompletion();
+		delayedAfterCompletion();
 	}
 
 	@Override
@@ -394,8 +401,8 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 
 	private void firePersist(PersistEvent event) {
 		try {
-//			checkTransactionSynchStatus();
-//			checkNoUnresolvedActionsBeforeOperation();
+			checkTransactionSynchStatus();
+			checkNoUnresolvedActionsBeforeOperation();
 
 			for ( PersistEventListener listener : listeners( EventType.PERSIST ) ) {
 				listener.onPersist( event );
@@ -408,39 +415,36 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 			throw exceptionConverter.convert( e );
 		}
 		finally {
-//			try {
-//				checkNoUnresolvedActionsAfterOperation();
-//			}
-//			catch (RuntimeException e) {
-//				throw exceptionConverter.convert( e );
-//			}
-		}
-	}
-
-	@Override
-	public void flush() {
-		checkOpen();
-		doFlush();
-	}
-
-	private void doFlush() {
-//		checkTransactionNeeded();
-//		checkTransactionSynchStatus();
-
-		try {
-//			if ( persistenceContext.getCascadeLevel() > 0 ) {
-//				throw new HibernateException( "Flush during cascade is dangerous" );
-//			}
-
-			FlushEvent flushEvent = new FlushEvent( this );
-			for ( FlushEventListener listener : listeners( EventType.FLUSH ) ) {
-				listener.onFlush( flushEvent );
+			try {
+				checkNoUnresolvedActionsAfterOperation();
 			}
-
-//			delayedAfterCompletion();
+			catch (RuntimeException e) {
+				throw exceptionConverter.convert( e );
+			}
 		}
-		catch (RuntimeException e) {
-			throw exceptionConverter.convert( e );
+	}
+
+	protected void checkTransactionSynchStatus() {
+		pulseTransactionCoordinator();
+		delayedAfterCompletion();
+	}
+
+	protected void pulseTransactionCoordinator() {
+		if ( !isClosed() ) {
+			getTransactionCoordinator().pulse();
+		}
+	}
+
+	protected void delayedAfterCompletion() {
+		if ( getTransactionCoordinator() instanceof JtaTransactionCoordinatorImpl ) {
+			( (JtaTransactionCoordinatorImpl) getTransactionCoordinator() ).getSynchronizationCallbackCoordinator()
+					.processAnyDelayedAfterCompletion();
+		}
+	}
+
+	private void checkNoUnresolvedActionsBeforeOperation() {
+		if ( getPersistenceContext().getCascadeLevel() == 0 && getActionQueue().hasUnresolvedEntityInsertActions() ) {
+			throw new IllegalStateException( "There are delayed insert actions before operation as cascade level 0." );
 		}
 	}
 
@@ -460,7 +464,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 			return;
 		}
 		log.trace( "Automatically flushing session" );
-		doFlush();
+		flush();
 	}
 
 	@Override
