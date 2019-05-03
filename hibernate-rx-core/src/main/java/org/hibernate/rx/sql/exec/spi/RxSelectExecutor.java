@@ -14,6 +14,7 @@ import org.hibernate.ScrollMode;
 import org.hibernate.query.spi.ScrollableResultsImplementor;
 import org.hibernate.rx.sql.ast.consume.spi.RxSelect;
 import org.hibernate.sql.exec.spi.ExecutionContext;
+import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 import org.hibernate.sql.exec.spi.RowTransformer;
 
 /**
@@ -29,6 +30,7 @@ public interface RxSelectExecutor {
 
 	<R> List<R> list(
 			RxSelect jdbcSelect,
+			JdbcParameterBindings jdbcParameterBindings,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer);
 

@@ -3,8 +3,8 @@ package org.hibernate.rx.impl;
 import org.hibernate.rx.sql.ast.consume.spi.RxParameterBinder;
 import org.hibernate.sql.SqlExpressableType;
 import org.hibernate.sql.ast.consume.spi.SqlAstWalker;
-import org.hibernate.sql.ast.tree.spi.expression.GenericParameter;
-import org.hibernate.sql.ast.tree.spi.expression.LiteralParameter;
+import org.hibernate.sql.ast.tree.expression.GenericParameter;
+import org.hibernate.sql.ast.tree.expression.LiteralParameter;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.sql.results.spi.SqlSelection;
@@ -29,6 +29,11 @@ public class RxLiteralParameter implements GenericParameter, RxParameterBinder {
 	@Override
 	public SqlExpressableType getExpressableType() {
 		return delegate.getExpressableType();
+	}
+
+	@Override
+	public SqlExpressableType getType() {
+		return delegate.getType();
 	}
 
 	@Override

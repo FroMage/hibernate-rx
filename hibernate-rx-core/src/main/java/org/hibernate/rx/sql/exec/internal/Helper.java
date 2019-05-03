@@ -15,6 +15,7 @@ import org.hibernate.engine.spi.LoadQueryInfluencers;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.sql.ast.produce.internal.StandardSqlExpressionResolver;
 import org.hibernate.sql.ast.produce.spi.ColumnReferenceQualifier;
+import org.hibernate.sql.ast.produce.spi.SqlAstCreationContext;
 import org.hibernate.sql.ast.produce.spi.SqlExpressionResolver;
 import org.hibernate.sql.ast.produce.sqm.spi.Callback;
 import org.hibernate.sql.exec.spi.RowTransformer;
@@ -26,9 +27,6 @@ import org.hibernate.sql.results.spi.DomainResultAssembler;
 import org.hibernate.sql.results.spi.Initializer;
 import org.hibernate.sql.results.spi.RowReader;
 
-/**
- * @author Steve Ebersole
- */
 public class Helper {
 
 	public static final SqlExpressionResolver SQL_EXPRESSION_RESOLVER = new StandardSqlExpressionResolver(
@@ -59,8 +57,8 @@ public class Helper {
 					}
 
 					@Override
-					public ColumnReferenceQualifier getCurrentColumnReferenceQualifier() {
-						return null;
+					public SqlAstCreationContext getSqlAstCreationContext() {
+						return sessionFactory;
 					}
 
 					@Override
@@ -72,8 +70,12 @@ public class Helper {
 					public boolean shouldCreateShallowEntityResult() {
 						return false;
 					}
-				},
-				() -> sessionFactory
+
+					@Override
+					public ColumnReferenceQualifier getCurrentColumnReferenceQualifier() {
+						throw new UnsupportedOperationException(  );
+					}
+				}
 		);
 
 		return new RowReaderStandardImpl<>(
@@ -99,99 +101,4 @@ public class Helper {
 			};
 		}
 	}
-
-//
-//	public static JdbcParameterBindings createJdbcParameterBindings(
-//			QueryParameterBindings<QueryParameterBinding<?>> domainParamBindings,
-//			Map<QueryParameterImplementor,List<JdbcParameter>> jdbcParamsByDomainParams,
-//			SharedSessionContractImplementor session) {
-//		final JdbcParameterBindings jdbcParameterBindings = new JdbcParameterBindingsImpl();
-//
-//		domainParamBindings.visitBindings(
-//				(queryParameterImplementor, queryParameterBinding) -> {
-//					final List<JdbcParameter> jdbcParameters = jdbcParamsByDomainParams.get( queryParameterImplementor );
-//					final Object bindValue = domainParamBindings.getBinding( queryParameterImplementor ).getBindValue();
-//
-//					final AllowableParameterType parameterType = determineParameterType( queryParameterBinding, queryParameterImplementor, session );
-//
-//					parameterType.dehydrate(
-//							parameterType.unresolve( bindValue, session ),
-//							new ExpressableType.JdbcValueCollector() {
-//								private int position = 0;
-//
-//								@Override
-//								public void collect(Object jdbcValue, SqlExpressableType type, Column boundColumn) {
-//									final JdbcParameter jdbcParameter = jdbcParameters.get( position );
-//									jdbcParameterBindings.addBinding(
-//											jdbcParameter,
-//											new JdbcParameterBinding() {
-//												@Override
-//												public SqlExpressableType getBindType() {
-//													return jdbcParameter.getType();
-//												}
-//
-//												@Override
-//												public Object getBindValue() {
-//													return jdbcValue;
-//												}
-//											}
-//									);
-//									position++;
-//								}
-//							},
-//							Clause.IRRELEVANT,
-//							session
-//					);
-//				}
-//		);
-////		for ( Map.Entry<QueryParameterImplementor, List<JdbcParameter>> entry : jdbcParamsByDomainParams.entrySet() ) {
-////			final QueryParameterBinding<?> binding = domainParamBindings.getBinding( entry.getKey() );
-////			binding.getBindType().dehydrate(
-////					binding.getBindType().unresolve( binding.getBindValue(), session ),
-////					new Writeable.JdbcValueCollector() {
-////						private int position = 0;
-////
-////						@Override
-////						public void collect(Object jdbcValue, SqlExpressableType type, Column boundColumn) {
-////							jdbcParameterBindings.addBinding(
-////									entry.getValue().get( position ),
-////									new JdbcParameterBinding() {
-////										@Override
-////										public SqlExpressableType getBindType() {
-////											return type;
-////										}
-////
-////										@Override
-////										public Object getBindValue() {
-////											return jdbcValue;
-////										}
-////									}
-////							);
-////						}
-////					},
-////					clause,
-////					session
-////			);
-////		}
-//
-//		return jdbcParameterBindings;
-//	}
-//
-//	private static AllowableParameterType determineParameterType(
-//			QueryParameterBinding<?> binding,
-//			QueryParameterImplementor<?> parameter,
-//			SharedSessionContractImplementor session) {
-//		if ( binding.getBindType() != null ) {
-//			return binding.getBindType();
-//		}
-//
-//		if ( parameter.getHibernateType() != null ) {
-//			return parameter.getHibernateType();
-//		}
-//
-//		final TypeConfiguration typeConfiguration = session.getFactory().getTypeConfiguration();
-//
-//		// assume we have (or can create) a mapping for the parameter's Java type
-//		return typeConfiguration.standardExpressableTypeForJavaType( parameter.getParameterType() );
-//	}
 }

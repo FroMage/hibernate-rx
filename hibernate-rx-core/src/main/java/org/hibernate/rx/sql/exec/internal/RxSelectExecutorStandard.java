@@ -1,12 +1,12 @@
 package org.hibernate.rx.sql.exec.internal;
 
 import java.io.Serializable;
-import java.sql.Connection;
-import java.sql.ResultSet;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -24,7 +24,7 @@ import org.hibernate.sql.exec.internal.ListResultsConsumer;
 import org.hibernate.sql.exec.internal.ResultsConsumer;
 import org.hibernate.sql.exec.internal.ScrollableResultsConsumer;
 import org.hibernate.sql.exec.spi.ExecutionContext;
-import org.hibernate.sql.exec.spi.PreparedStatementCreator;
+import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 import org.hibernate.sql.exec.spi.RowTransformer;
 import org.hibernate.sql.results.internal.JdbcValuesSourceProcessingStateStandardImpl;
 import org.hibernate.sql.results.internal.RowProcessingStateStandardImpl;
@@ -59,13 +59,17 @@ public class RxSelectExecutorStandard implements RxSelectExecutor {
 	@Override
 	public <R> List<R> list(
 			RxSelect rxSelect,
+			JdbcParameterBindings jdbcParameterBindings,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer) {
 		return executeQuery(
 				rxSelect,
 				executionContext,
 				rowTransformer,
-				Connection::prepareStatement,
+				(sql) -> executionContext.getSession()
+						.getJdbcCoordinator()
+						.getStatementPreparer()
+						.prepareStatement( sql ),
 				ListResultsConsumer.instance()
 		);
 	}
@@ -80,11 +84,10 @@ public class RxSelectExecutorStandard implements RxSelectExecutor {
 				rxSelect,
 				executionContext,
 				rowTransformer,
-				(connection, sql) -> connection.prepareStatement(
+				(sql) -> executionContext.getSession().getJdbcCoordinator().getStatementPreparer().prepareQueryStatement(
 						sql,
-						scrollMode.toResultSetType(),
-						ResultSet.CONCUR_READ_ONLY,
-						ResultSet.CLOSE_CURSORS_AT_COMMIT
+						scrollMode,
+						true
 				),
 				ScrollableResultsConsumer.instance()
 		);
@@ -116,7 +119,7 @@ public class RxSelectExecutorStandard implements RxSelectExecutor {
 			RxSelect rxSelect,
 			ExecutionContext executionContext,
 			RowTransformer<R> rowTransformer,
-			PreparedStatementCreator statementCreator,
+			Function<String, PreparedStatement> statementCreator,
 			ResultsConsumer<T,R> resultsConsumer) {
 
 		final JdbcValues jdbcValues = resolveJdbcValuesSource(
@@ -221,7 +224,7 @@ public class RxSelectExecutorStandard implements RxSelectExecutor {
 			queryResultsCacheKey = QueryKey.from(
 					rxSelect.getSql(),
 					executionContext.getQueryOptions().getLimit(),
-					executionContext.getParameterBindingContext().getQueryParameterBindings(),
+					executionContext.getDomainParameterBindingContext().getQueryParameterBindings(),
 					executionContext.getSession()
 			);
 

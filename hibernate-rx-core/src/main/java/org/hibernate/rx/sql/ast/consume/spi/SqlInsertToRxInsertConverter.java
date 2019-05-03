@@ -1,22 +1,18 @@
 package org.hibernate.rx.sql.ast.consume.spi;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.model.relational.spi.PhysicalTable;
-import org.hibernate.metamodel.model.relational.spi.Table;
 import org.hibernate.sql.ast.consume.SyntaxException;
-import org.hibernate.sql.ast.consume.spi.AbstractSqlAstWalker;
 import org.hibernate.sql.ast.consume.spi.SqlAstWalker;
-import org.hibernate.sql.ast.tree.spi.InsertStatement;
-import org.hibernate.sql.ast.tree.spi.assign.Assignment;
-import org.hibernate.sql.ast.tree.spi.expression.ColumnReference;
-import org.hibernate.sql.ast.tree.spi.expression.Expression;
-import org.hibernate.sql.ast.tree.spi.expression.GenericParameter;
+import org.hibernate.sql.ast.tree.expression.ColumnReference;
+import org.hibernate.sql.ast.tree.expression.Expression;
+import org.hibernate.sql.ast.tree.expression.GenericParameter;
+import org.hibernate.sql.ast.tree.insert.InsertStatement;
+import org.hibernate.sql.ast.tree.update.Assignment;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.sql.exec.spi.JdbcParameterBinding;
@@ -52,23 +48,6 @@ public class SqlInsertToRxInsertConverter extends AbstractSqlAstToRxOperationCon
 				return walker.getAffectedTableNames();
 			}
 		};
-		/*return new JdbcInsert() {
-			public boolean isKeyGenerationEnabled() {
-				return false;
-			}
-
-			public String getSql() {
-				return walker.getSql();
-			}
-
-			public List<JdbcParameterBinder> getParameterBinders() {
-				return walker.getParameterBinders();
-			}
-
-			public Set<String> getAffectedTableNames() {
-				return walker.getAffectedTableNames();
-			}
-		};*/
 	}
 
 	@Override
@@ -111,47 +90,52 @@ public class SqlInsertToRxInsertConverter extends AbstractSqlAstToRxOperationCon
 	}
 
 	private void processStatement(InsertStatement sqlAst) {
-		this.appendSql( "insert into " );
-		PhysicalTable targetTable = (PhysicalTable) sqlAst.getTargetTable().getTable();
-		String tableName = this.getSessionFactory()
-				.getJdbcServices()
+		appendSql( "insert into " );
+
+		final PhysicalTable targetTable = (PhysicalTable) sqlAst.getTargetTable().getTable();
+		final String tableName = getSessionFactory().getJdbcServices()
 				.getJdbcEnvironment()
 				.getQualifiedObjectNameFormatter()
 				.format(
 						targetTable.getQualifiedTableName(),
-						this.getSessionFactory().getJdbcServices().getJdbcEnvironment().getDialect()
+						getSessionFactory().getJdbcServices().getJdbcEnvironment().getDialect()
 				);
-		this.appendSql( tableName );
-		this.appendSql( " (" );
+
+		appendSql( tableName );
+
+		// todo (6.0) : need to render the target column list
+		// 		for now we do not render
+
+
+		appendSql( " (" );
+
 		boolean firstPass = true;
-
-		Iterator var5;
-		ColumnReference columnReference;
-		for ( var5 = sqlAst.getTargetColumnReferences().iterator(); var5.hasNext(); this.visitColumnReference(
-				columnReference ) ) {
-			columnReference = (ColumnReference) var5.next();
+		for ( ColumnReference columnReference : sqlAst.getTargetColumnReferences() ) {
 			if ( firstPass ) {
 				firstPass = false;
 			}
 			else {
-				this.appendSql( ", " );
+				appendSql( ", " );
 			}
+
+			visitColumnReference( columnReference );
 		}
 
-		this.appendSql( ") values (" );
+		appendSql( ") values (" );
+
 		firstPass = true;
-
-		Expression expression;
-		for ( var5 = sqlAst.getValues().iterator(); var5.hasNext(); expression.accept( this ) ) {
-			expression = (Expression) var5.next();
+		for ( Expression expression : sqlAst.getValues() ) {
 			if ( firstPass ) {
 				firstPass = false;
 			}
 			else {
-				this.appendSql( ", " );
+				appendSql( ", " );
 			}
+
+			expression.accept( this );
 		}
 
-		this.appendSql( ")" );
+		appendSql( ")" );
 	}
+
 }

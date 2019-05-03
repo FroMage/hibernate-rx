@@ -78,7 +78,7 @@ public class DefaultRxDeleteEventListener extends DefaultDeleteEventListener {
 			}
 			performDetachedEntityDeletionCheck( event );
 
-			id = descriptor.getIdentifier( entity, source );
+			id = descriptor.getIdentifier( entity );
 
 			if ( id == null ) {
 				deleteStage.toCompletableFuture().completeExceptionally( new TransientObjectException(

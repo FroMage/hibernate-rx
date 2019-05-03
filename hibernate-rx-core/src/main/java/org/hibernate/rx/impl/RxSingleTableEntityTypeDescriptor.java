@@ -2,12 +2,11 @@ package org.hibernate.rx.impl;
 
 import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
 import org.hibernate.boot.model.domain.EntityMapping;
+import org.hibernate.boot.model.domain.spi.EntityMappingImplementor;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.loader.internal.TemplateParameterBindingContext;
@@ -17,6 +16,7 @@ import org.hibernate.metamodel.model.domain.spi.EntityTypeDescriptor;
 import org.hibernate.metamodel.model.domain.spi.IdentifiableTypeDescriptor;
 import org.hibernate.metamodel.model.relational.spi.Column;
 import org.hibernate.query.internal.QueryOptionsImpl;
+import org.hibernate.query.spi.ComparisonOperator;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.rx.event.CompletionStageExtraState;
 import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
@@ -26,22 +26,23 @@ import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.consume.spi.SqlDeleteToJdbcDeleteConverter;
 import org.hibernate.sql.ast.produce.spi.SqlAstDeleteDescriptor;
 import org.hibernate.sql.ast.produce.sqm.spi.Callback;
-import org.hibernate.sql.ast.tree.spi.DeleteStatement;
-import org.hibernate.sql.ast.tree.spi.InsertStatement;
-import org.hibernate.sql.ast.tree.spi.expression.ColumnReference;
-import org.hibernate.sql.ast.tree.spi.expression.LiteralParameter;
-import org.hibernate.sql.ast.tree.spi.from.TableReference;
-import org.hibernate.sql.ast.tree.spi.predicate.Junction;
-import org.hibernate.sql.ast.tree.spi.predicate.RelationalPredicate;
+import org.hibernate.sql.ast.tree.delete.DeleteStatement;
+import org.hibernate.sql.ast.tree.expression.ColumnReference;
+import org.hibernate.sql.ast.tree.expression.LiteralParameter;
+import org.hibernate.sql.ast.tree.from.TableReference;
+import org.hibernate.sql.ast.tree.insert.InsertSelectStatement;
+import org.hibernate.sql.ast.tree.insert.InsertStatement;
+import org.hibernate.sql.ast.tree.predicate.ComparisonPredicate;
+import org.hibernate.sql.ast.tree.predicate.Junction;
+import org.hibernate.sql.exec.spi.DomainParameterBindingContext;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcMutation;
-import org.hibernate.sql.exec.spi.ParameterBindingContext;
 
 public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeDescriptor<T> implements
 		EntityTypeDescriptor<T> {
 
 	public RxSingleTableEntityTypeDescriptor(
-			EntityMapping bootMapping,
+			EntityMappingImplementor bootMapping,
 			IdentifiableTypeDescriptor superTypeDescriptor,
 			RuntimeModelCreationContext creationContext)
 			throws HibernateException {
@@ -85,9 +86,8 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 				unresolvedId,
 				(jdbcValue, type, boundColumn) ->
 						identifierJunction.add(
-								new RelationalPredicate(
-										RelationalPredicate.Operator.EQUAL,
-										new ColumnReference( boundColumn ),
+								new ComparisonPredicate(
+										new ColumnReference( boundColumn ), ComparisonOperator.EQUAL,
 										new LiteralParameter(
 												jdbcValue,
 												boundColumn.getExpressableType(),
@@ -178,7 +178,7 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 
 	private ExecutionContext getExecutionContext(SharedSessionContractImplementor session) {
 		return new ExecutionContext() {
-			private final ParameterBindingContext parameterBindingContext = new TemplateParameterBindingContext( session.getFactory() );
+			private final DomainParameterBindingContext parameterBindingContext = new TemplateParameterBindingContext( session.getFactory() );
 
 			@Override
 			public SharedSessionContractImplementor getSession() {
@@ -191,7 +191,7 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 			}
 
 			@Override
-			public ParameterBindingContext getParameterBindingContext() {
+			public DomainParameterBindingContext getDomainParameterBindingContext() {
 				return parameterBindingContext;
 			}
 

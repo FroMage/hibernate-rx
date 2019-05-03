@@ -9,9 +9,10 @@ import org.hibernate.metamodel.model.relational.spi.PhysicalTable;
 import org.hibernate.rx.sql.ast.consume.spi.AbstractSqlAstToRxOperationConverter;
 import org.hibernate.rx.sql.ast.consume.spi.RxOperation;
 import org.hibernate.rx.sql.ast.consume.spi.RxParameterBinder;
+import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.consume.spi.SqlAstWalker;
-import org.hibernate.sql.ast.tree.spi.DeleteStatement;
-import org.hibernate.sql.ast.tree.spi.expression.GenericParameter;
+import org.hibernate.sql.ast.tree.delete.DeleteStatement;
+import org.hibernate.sql.ast.tree.expression.GenericParameter;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.sql.exec.spi.JdbcParameterBinding;
@@ -101,8 +102,14 @@ public class SqlDeleteToRxDeleteConverter extends AbstractSqlAstToRxOperationCon
 		appendSql( tableName );
 
 		if ( deleteStatement.getRestriction() != null ) {
-			appendSql( " where " );
-			deleteStatement.getRestriction().accept( this );
+			getClauseStack().push( Clause.WHERE );
+			try {
+				appendSql( " where " );
+				deleteStatement.getRestriction().accept( this );
+			}
+			finally {
+				getClauseStack().pop();
+			}
 		}
 	}
 }

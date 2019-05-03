@@ -32,9 +32,9 @@ public class RxIntegrator implements Integrator {
 	private void attachEventContextManagingListenersIfRequired(SessionFactoryServiceRegistry serviceRegistry) {
 		EventListenerRegistry eventListenerRegistry = serviceRegistry.getService( EventListenerRegistry.class );
 
-		eventListenerRegistry.addDuplicationStrategy( DefaultRxPersistEventListener.EventContextManagingPersistEventListenerDuplicationStrategy.INSTANCE );
-		eventListenerRegistry.addDuplicationStrategy( DefaultRxDeleteEventListener.EventContextManagingDeleteEventListenerDuplicationStrategy.INSTANCE );
 		eventListenerRegistry.addDuplicationStrategy( DefaultRxLoadEventListener.EventContextManagingLoadEventListenerDuplicationStrategy.INSTANCE );
+		eventListenerRegistry.addDuplicationStrategy( DefaultRxDeleteEventListener.EventContextManagingDeleteEventListenerDuplicationStrategy.INSTANCE );
+		eventListenerRegistry.addDuplicationStrategy( DefaultRxPersistEventListener.EventContextManagingPersistEventListenerDuplicationStrategy.INSTANCE );
 
 		eventListenerRegistry.getEventListenerGroup( EventType.LOAD).appendListener( new DefaultRxLoadEventListener() );
 		eventListenerRegistry.getEventListenerGroup( EventType.DELETE).appendListener( new DefaultRxDeleteEventListener() );

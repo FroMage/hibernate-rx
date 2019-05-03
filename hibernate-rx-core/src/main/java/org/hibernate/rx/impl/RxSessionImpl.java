@@ -29,6 +29,7 @@ import org.hibernate.ObjectDeletedException;
 import org.hibernate.ObjectNotFoundException;
 import org.hibernate.Session;
 import org.hibernate.TypeMismatchException;
+import org.hibernate.engine.internal.StatefulPersistenceContext;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionDelegatorBaseImpl;
@@ -41,6 +42,8 @@ import org.hibernate.event.spi.DeleteEvent;
 import org.hibernate.event.spi.DeleteEventListener;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
+import org.hibernate.event.spi.FlushEvent;
+import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.event.spi.LoadEvent;
 import org.hibernate.event.spi.LoadEventListener;
 import org.hibernate.event.spi.PersistEvent;
@@ -75,6 +78,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	private final RxHibernateSessionFactoryImplementor factory;
 	private final ExceptionConverter exceptionConverter;
 	private final ExceptionMapper exceptionMapper = ExceptionMapperStandardImpl.INSTANCE;
+	private transient StatefulPersistenceContext persistenceContext;
 	private transient boolean disallowOutOfTransactionUpdateOperations;
 
 
@@ -85,6 +89,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		this.factory = factory;
 		this.exceptionConverter = delegate.getExceptionConverter();
 		this.executor = ForkJoinPool.commonPool();
+		this.persistenceContext = new StatefulPersistenceContext( this );
 	}
 
 	@Override
@@ -193,6 +198,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 		executor.execute( () -> {
 			checkOpen();
 			firePersist( new RxPersistEvent( null, object, this, persistStage ) );
+			flush();
 		} );
 		return persistStage;
 	}
@@ -209,8 +215,40 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	}
 
 	@Override
+	public void flush() throws HibernateException {
+		checkOpen();
+		doFlush();
+	}
+
+	private void doFlush() {
+		checkTransactionNeeded();
+		checkTransactionSynchStatus();
+
+		try {
+			if ( getPersistenceContext().getCascadeLevel() > 0 ) {
+				throw new HibernateException( "Flush during cascade is dangerous" );
+			}
+
+			FlushEvent flushEvent = new FlushEvent( this );
+			for ( FlushEventListener listener : listeners( EventType.FLUSH ) ) {
+				listener.onFlush( flushEvent );
+			}
+
+			delayedAfterCompletion();
+		}
+		catch ( RuntimeException e ) {
+			throw exceptionConverter.convert( e );
+		}
+	}
+
+	@Override
+	public void clear() {
+		getPersistenceContext().clear();
+	}
+
+	@Override
 	public PersistenceContext getPersistenceContext() {
-		return super.getPersistenceContext();
+		return persistenceContext;
 	}
 
 	public CompletionStage<Void> deleteAsync(String entityName, Object object) throws HibernateException {
@@ -281,9 +319,9 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	}
 
 	protected void checkOpenOrWaitingForAutoClose() {
-		if ( !waitingForAutoClose ) {
+//		if ( !waitingForAutoClose ) {
 			checkOpen();
-		}
+//		}
 	}
 
 	private void fireLoad(LoadEvent event, LoadEventListener.LoadType loadType) {
@@ -459,7 +497,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	}
 
 	private void managedFlush() {
-		if ( isClosed() ) {// && !waitingForAutoClose ) {
+		if ( isClosed() ) {//wa && !waitingForAutoClose ) {
 			log.trace( "Skipping auto-flush due to session closed" );
 			return;
 		}

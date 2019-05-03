@@ -12,16 +12,15 @@ import java.util.List;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.rx.sql.exec.internal.RxSelectImpl;
+import org.hibernate.sql.ast.consume.SqlAstPrinter;
 import org.hibernate.sql.ast.consume.spi.SqlSelectAstWalker;
 import org.hibernate.sql.ast.produce.spi.SqlAstSelectDescriptor;
-import org.hibernate.sql.ast.tree.spi.QuerySpec;
-import org.hibernate.sql.ast.tree.spi.SelectStatement;
-import org.hibernate.sql.exec.internal.JdbcSelectImpl;
+import org.hibernate.sql.ast.tree.SqlAstTreeLogger;
+import org.hibernate.sql.ast.tree.select.QuerySpec;
+import org.hibernate.sql.ast.tree.select.SelectStatement;
 import org.hibernate.sql.exec.internal.StandardResultSetMappingDescriptor;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
-import org.hibernate.sql.exec.spi.JdbcParameterBinding;
-import org.hibernate.sql.exec.spi.JdbcSelect;
 import org.hibernate.type.descriptor.spi.SqlTypeDescriptorIndicators;
 
 import io.reactiverse.pgclient.PgPreparedQuery;
@@ -57,6 +56,11 @@ public class SqlAstSelectToRxSelectConverter
 	}
 
 	public static RxSelect interpret(SqlAstSelectDescriptor sqlSelectPlan, SessionFactoryImplementor sessionFactory) {
+		final SelectStatement sqlAstStatement = sqlSelectPlan.getSqlAstStatement();
+		if ( SqlAstTreeLogger.DEBUG_ENABLED ) {
+			SqlAstPrinter.print( sqlAstStatement );
+		}
+
 		final SqlAstSelectToRxSelectConverter walker = new SqlAstSelectToRxSelectConverter( sessionFactory );
 
 		walker.visitSelectQuery( sqlSelectPlan.getSqlAstStatement() );
@@ -103,4 +107,5 @@ public class SqlAstSelectToRxSelectConverter
 
 		rxParameterBinders.add( rxBinder );
 	}
+
 }

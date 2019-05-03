@@ -8,8 +8,8 @@ description = 'Hibernate Rx Core'
 dependencies {
 	compile project( ':hibernate-rx-api' )
 
-	compile 'org.hibernate.orm:hibernate-core:6.0.0.Alpha1'
-	testCompile 'org.hibernate.orm:hibernate-testing:6.0.0.Alpha1'
+	compile 'org.hibernate.orm:hibernate-core:6.0.0.Alpha2'
+	testCompile 'org.hibernate.orm:hibernate-testing:6.0.0.Alpha2'
 
     compile 'io.reactiverse:reactive-pg-client:0.11.2'
 
