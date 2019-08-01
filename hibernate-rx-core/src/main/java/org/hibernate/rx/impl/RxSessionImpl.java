@@ -73,7 +73,6 @@ import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_STORE_MODE;
 public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession, EventSource {
 	private static final EntityManagerMessageLogger log = HEMLogging.messageLogger( RxSessionImpl.class );
 
-	private final Executor executor;
 	private final CompletionStage<EntityTransaction> transactionStage = CompletableFuture.completedFuture( null );
 	private final RxHibernateSessionFactoryImplementor factory;
 	private final ExceptionConverter exceptionConverter;
@@ -88,13 +87,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 				.isAllowOutOfTransactionUpdateOperations();
 		this.factory = factory;
 		this.exceptionConverter = delegate.getExceptionConverter();
-		this.executor = ForkJoinPool.commonPool();
 		this.persistenceContext = new StatefulPersistenceContext( this );
-	}
-
-	@Override
-	public Executor getExecutor() {
-		return executor;
 	}
 
 	@Override
@@ -133,28 +126,27 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	}
 
 	@Override
+	// This is an idea, it's not working right now
 	public CompletionStage<Void> inTransaction(final Function<EntityTransaction, CompletionStage<Void>> consumer) {
 		CompletableFuture txStage = new CompletableFuture();
-		executor.execute( () -> {
+		try {
+			final EntityTransaction tx = beginTransaction();
 			try {
-				final EntityTransaction tx = beginTransaction();
-				try {
-					consumer.apply( tx )
-							.exceptionally(  err -> { txStage.completeExceptionally( err ); return null; } )
-							.thenAccept( ignore -> {
-								tx.commit();
-								txStage.complete( null );
-							} );
-				}
-				catch (Throwable t) {
-					txStage.completeExceptionally( t );
-					tx.rollback();
-				}
+				consumer.apply( tx )
+						.exceptionally(  err -> { txStage.completeExceptionally( err ); return null; } )
+						.thenAccept( ignore -> {
+							tx.commit();
+							txStage.complete( null );
+						} );
 			}
 			catch (Throwable t) {
 				txStage.completeExceptionally( t );
+				tx.rollback();
 			}
-		} );
+		}
+		catch (Throwable t) {
+			txStage.completeExceptionally( t );
+		}
 		return txStage;
 	}
 
@@ -195,11 +187,9 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	@Override
 	public CompletionStage<Void> persistAsync(Object object) {
 		final CompletableFuture<Void> persistStage = new CompletableFuture<>();
-		executor.execute( () -> {
-			checkOpen();
-			firePersist( new RxPersistEvent( null, object, this, persistStage ) );
-			flush();
-		} );
+//		checkOpen();
+		firePersist( new RxPersistEvent( null, object, this, persistStage ) );
+		flush();
 		return persistStage;
 	}
 
@@ -216,13 +206,13 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 
 	@Override
 	public void flush() throws HibernateException {
-		checkOpen();
+//		checkOpen();
 		doFlush();
 	}
 
 	private void doFlush() {
-		checkTransactionNeeded();
-		checkTransactionSynchStatus();
+//		checkTransactionNeeded();
+//		checkTransactionSynchStatus();
 
 		try {
 			if ( getPersistenceContext().getCascadeLevel() > 0 ) {
@@ -253,21 +243,17 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 
 	public CompletionStage<Void> deleteAsync(String entityName, Object object) throws HibernateException {
 		final CompletableFuture<Void> deleteStage = new CompletableFuture<>();
-		executor.execute( () -> {
-			checkOpen();
-			fireDelete( new RxDeleteEvent( entityName, object, this, deleteStage ) );
-			// At the moment we don't support tx;
-			flush();
-		} );
+//		checkOpen();
+		fireDelete( new RxDeleteEvent( entityName, object, this, deleteStage ) );
+		// At the moment we don't support tx;
+		flush();
 		return deleteStage;
 	}
 
 	public CompletionStage<Void> deleteAsync(Object object) {
 		final CompletableFuture<Void> deleteStage = new CompletableFuture<>();
-		executor.execute( () -> {
-			checkOpen();
-			fireDelete( new RxDeleteEvent( object, this, deleteStage ) );
-		} );
+//			checkOpen();
+		fireDelete( new RxDeleteEvent( object, this, deleteStage ) );
 		return deleteStage;
 	}
 
@@ -320,7 +306,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 
 	protected void checkOpenOrWaitingForAutoClose() {
 //		if ( !waitingForAutoClose ) {
-			checkOpen();
+//			checkOpen();
 //		}
 	}
 
@@ -336,10 +322,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 	@Override
 	public <T> CompletionStage<Optional<T>> findAsync(Class<T> entityClass, Object primaryKey) {
 		final CompletableFuture<Optional<T>> findStage = new CompletableFuture<>();
-		CompletableFuture.runAsync( () -> {
-			checkOpen();
-			findAsync( entityClass, primaryKey, null, getProperties(), findStage );
-		} );
+		findAsync( entityClass, primaryKey, null, getProperties(), findStage );
 		return findStage;
 	}
 
@@ -349,7 +332,7 @@ public class RxSessionImpl extends SessionDelegatorBaseImpl implements RxSession
 			LockModeType lockModeType,
 			Map<String, Object> properties,
 			CompletionStage<Optional<T>> findStage) {
-		checkOpen();
+//		checkOpen();
 		LockOptions lockOptions = null;
 		try {
 			getLoadQueryInfluencers().getEffectiveEntityGraph().applyConfiguredGraph( properties );

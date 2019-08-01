@@ -56,6 +56,7 @@ public class RxSelectExecutorStandard implements RxSelectExecutor {
 
 	private static final Logger log = Logger.getLogger( RxSelectExecutorStandard.class );
 
+	// TODO: We should return something reactive
 	@Override
 	public <R> List<R> list(
 			RxSelect rxSelect,

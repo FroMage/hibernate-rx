@@ -20,6 +20,9 @@ import io.vertx.junit5.VertxTestContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Obtain a reactive connection instead of the JDBC one
+ */
 @ExtendWith(VertxExtension.class)
 public class RxConnectionProviderTest {
 

@@ -100,7 +100,7 @@ public class RxSingleIdEntityLoader<T> extends StandardSingleIdEntityLoader {
 			LockOptions lockOptions,
 			SharedSessionContractImplementor session) {
 		CompletableFuture<T> loadStage = new CompletableFuture<>();
-		( (RxSession) session ).getExecutor().execute( () -> executeLoad( id, lockOptions, session, loadStage ) );
+		 executeLoad( id, lockOptions, session, loadStage );
 		return loadStage;
 	}
 

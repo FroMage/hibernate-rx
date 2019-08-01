@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Test creation of a reactive SessionFactory
+ */
 public class StandAloneReactiveTest {
 
 	@Test

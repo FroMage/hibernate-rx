@@ -56,7 +56,7 @@ import io.vertx.core.net.PemTrustOptions;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 
-
+/* Examples related to how to use the reactive pg client */
 @ExtendWith(VertxExtension.class)
 public class PgPoolExamples {
 

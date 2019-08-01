@@ -162,7 +162,6 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 				.thenAccept( ignore -> {
 					session.flush();
 					testContext.completeNow();
-					System.out.println( "!Done!" );
 				} );
 	}
 
@@ -182,9 +181,12 @@ public class ReactiveSessionTest extends SessionFactoryBasedFunctionalTest {
 		} );
 	}
 
-	private void assertAsync(VertxTestContext ctx, Runnable r) {
+	/**
+	 * Completes the {@link VertxTestContext} based on the result of the assertions.
+	 */
+	private void assertAsync(VertxTestContext ctx, Runnable assertions) {
 		try {
-			r.run();
+			assertions.run();
 			ctx.completeNow();
 		}
 		catch (Throwable t) {

@@ -27,7 +27,4 @@ public interface RxSession extends Session {
 	<R> RxQuery<R> createQuery(Class<R> resultType, String jpql);
 
 	CompletionStage<Void> removeAsync(Object entity);
-
-	// Maybe this should be more an execute or run method
-	Executor getExecutor();
 }

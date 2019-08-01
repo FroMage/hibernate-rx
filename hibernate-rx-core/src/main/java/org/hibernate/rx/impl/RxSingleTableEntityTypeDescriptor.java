@@ -135,7 +135,6 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 	@Override
 	public void insert(
 			Object id, Object[] fields, Object object, SharedSessionContractImplementor session) {
-		EntityEntry entry = session.getPersistenceContext().getEntry( object );
 		super.insert( id, fields, object, session );
 	}
 
@@ -145,9 +144,7 @@ public class RxSingleTableEntityTypeDescriptor<T> extends SingleTableEntityTypeD
 			Object[] fields,
 			Object object,
 			SharedSessionContractImplementor session) {
-		EntityEntry entry = session.getPersistenceContext().getEntry( object );
-		CompletionStageExtraState extraState = entry.getExtraState( CompletionStageExtraState.class );
-		return insertInternal( id, fields, object, session, (CompletionStage<Void>) extraState.getStage() );
+		return insertInternal( id, fields, object, session, null  );
 	}
 
 	protected Object insertInternal(

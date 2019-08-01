@@ -30,9 +30,6 @@ import io.reactiverse.pgclient.PgResult;
 import io.reactiverse.pgclient.Tuple;
 import io.reactiverse.pgclient.impl.ArrayTuple;
 
-/**
- * @author Steve Ebersole
- */
 public class DeferredResultSetAccess extends AbstractResultSetAccess {
 	private static final Logger log = CoreLogging.logger( DeferredResultSetAccess.class );
 
@@ -41,6 +38,8 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 	private final Function<String, PreparedStatement> statementCreator;
 
 	private PreparedStatement preparedStatement;
+
+	// TODO: I think this should be something like CompletionStage<ResultSet>
 	private ResultSet resultSet;
 
 	public DeferredResultSetAccess(
@@ -53,6 +52,7 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 		this.statementCreator = statementCreator;
 	}
 
+	// TODO: It needs to return a reactive type or the ResultSet will always be null
 	@Override
 	public ResultSet getResultSet() {
 		if ( resultSet == null ) {
@@ -78,6 +78,7 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 		final String sql = jdbcSelect.getSql();
 		log.tracef( "Executing query to retrieve ResultSet : %s", sql );
 
+
 		execute( jdbcSelect, executionContext, new CompletableFuture<>() );
 	}
 
@@ -89,6 +90,7 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 		return tuple;
 	}
 
+	// TODO: This method should return the query stage, not having it as a parameter
 	public void execute(RxSelect select, ExecutionContext executionContext, CompletionStage<Object> queryStage) {
 		final RxSession rxSession = (RxSession) executionContext.getSession();
 		RxConnectionPoolProvider poolProvider = reactivePoolProvider( executionContext );

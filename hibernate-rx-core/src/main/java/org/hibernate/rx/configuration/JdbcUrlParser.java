@@ -2,6 +2,9 @@ package org.hibernate.rx.configuration;
 
 import java.net.URI;
 
+/**
+ * Utility class to convert url
+ */
 public class JdbcUrlParser {
 
 	public static URI parse(String url) {
