@@ -3,7 +3,6 @@ package org.hibernate.rx.impl;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
@@ -13,10 +12,8 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.rx.service.RxConnection;
 import org.hibernate.rx.service.initiator.RxConnectionPoolProvider;
 
-import io.vertx.axle.pgclient.PgConnection;
 import io.vertx.axle.pgclient.PgPool;
 import io.vertx.axle.sqlclient.RowSet;
-import io.vertx.axle.sqlclient.SqlConnection;
 import io.vertx.axle.sqlclient.Tuple;
 import io.vertx.sqlclient.impl.ArrayTuple;
 

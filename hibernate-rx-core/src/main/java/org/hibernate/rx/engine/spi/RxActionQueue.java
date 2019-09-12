@@ -53,6 +53,7 @@ import org.hibernate.metadata.ClassMetadata;
 import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.proxy.LazyInitializer;
 import org.hibernate.rx.engine.impl.RxEntityInsertAction;
+import org.hibernate.rx.engine.impl.RxEntityUpdateAction;
 import org.hibernate.type.CollectionType;
 import org.hibernate.type.CompositeType;
 import org.hibernate.type.EntityType;
@@ -85,7 +86,7 @@ public class RxActionQueue {
 	// integrity
 	private ExecutableList<AbstractEntityInsertAction> insertions;
 	private ExecutableList<EntityDeleteAction> deletions;
-	private ExecutableList<EntityUpdateAction> updates;
+	private ExecutableList<RxEntityUpdateAction> updates;
 
 	// Actually the semantics of the next three are really "Bag"
 	// Note that, unlike objects, collection insertions, updates,
@@ -145,12 +146,12 @@ public class RxActionQueue {
 				}
 		);
 		EXECUTABLE_LISTS_MAP.put(
-				EntityUpdateAction.class,
-				new ListProvider<EntityUpdateAction>() {
-					ExecutableList<EntityUpdateAction> get(RxActionQueue instance) {
+				RxEntityUpdateAction.class,
+				new ListProvider<RxEntityUpdateAction>() {
+					ExecutableList<RxEntityUpdateAction> get(RxActionQueue instance) {
 						return instance.updates;
 					}
-					ExecutableList<EntityUpdateAction> init(RxActionQueue instance) {
+					ExecutableList<RxEntityUpdateAction> init(RxActionQueue instance) {
 						return instance.updates = new ExecutableList<>(
 								instance.isOrderUpdatesEnabled()
 						);
@@ -342,6 +343,15 @@ public class RxActionQueue {
 	 */
 	public void addAction(EntityUpdateAction action) {
 		addAction( EntityUpdateAction.class, action );
+	}
+
+	/**
+	 * Adds a reactive entity update action
+	 *
+	 * @param action The action representing the reactive entity update
+	 */
+	public void addAction(RxEntityUpdateAction action) {
+		addAction( RxEntityUpdateAction.class, action );
 	}
 
 	/**
