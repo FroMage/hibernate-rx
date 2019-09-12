@@ -3,6 +3,7 @@ package org.hibernate.rx;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import javax.persistence.Entity;
 import javax.persistence.Id;
@@ -28,12 +29,12 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import io.vertx.axle.pgclient.PgPool;
-import io.vertx.axle.sqlclient.RowSet;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.Timeout;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
+import io.vertx.axle.pgclient.PgPool;
+import io.vertx.axle.sqlclient.RowSet;
 
 @RunWith(VertxUnitRunner.class)
 public class ReactiveSessionTest {
@@ -199,34 +200,6 @@ public class ReactiveSessionTest {
 						} );
 				session.flush();
 		} );
-	}
-
-	@Test
-	public void reactiveUpdate(TestContext context) {
-		Async async = context.async();
-		populateDB( context )
-				.whenComplete( (popAR, popErr) -> {
-					context.assertNull( popErr );
-
-					RxSession rxSession = session.reactive();
-					rxSession.find( GuineaPig.class, 5 )
-							.whenComplete( (pigAR, err) -> {
-								context.assertNull( err );
-								context.assertNotNull( pigAR.get() );
-
-								pigAR.get().setName( "Tina" );
-								rxSession.flush().whenComplete( (flushAR, flushErr) -> {
-									context.assertNull( flushErr );
-									context.assertNull( flushAR );
-
-									selectNameFromId( 5 ).whenComplete( (selectRes, selectErr) -> {
-										context.assertNull( selectErr );
-										context.assertEquals( "Tina", selectRes );
-										async.complete();
-									} );
-								} );
-							} );
-				} );
 	}
 
 	@Entity

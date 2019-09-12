@@ -8,10 +8,15 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
+
+import javax.persistence.CacheRetrieveMode;
+import javax.persistence.CacheStoreMode;
+import javax.persistence.EntityManager;
 import javax.persistence.EntityNotFoundException;
 import javax.persistence.LockModeType;
 
 import org.hibernate.CacheMode;
+import org.hibernate.IdentifierLoadAccess;
 import org.hibernate.JDBCException;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
@@ -27,14 +32,14 @@ import org.hibernate.event.spi.DeleteEvent;
 import org.hibernate.event.spi.DeleteEventListener;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
-import org.hibernate.event.spi.FlushEvent;
-import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.event.spi.LoadEvent;
 import org.hibernate.event.spi.LoadEventListener;
 import org.hibernate.event.spi.PersistEventListener;
 import org.hibernate.graph.GraphSemantic;
 import org.hibernate.graph.RootGraph;
 import org.hibernate.graph.spi.RootGraphImplementor;
+import org.hibernate.internal.SessionImpl;
+import org.hibernate.jpa.internal.util.CacheModeHelper;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.rx.RxHibernateSession;
 import org.hibernate.rx.RxHibernateSessionFactory;
@@ -43,7 +48,6 @@ import org.hibernate.rx.RxSession;
 import org.hibernate.rx.StateControl;
 import org.hibernate.rx.engine.spi.RxHibernateSessionFactoryImplementor;
 import org.hibernate.rx.event.RxDeleteEvent;
-import org.hibernate.rx.event.RxFlushEvent;
 import org.hibernate.rx.event.RxLoadEvent;
 import org.hibernate.rx.event.RxPersistEvent;
 import org.hibernate.service.ServiceRegistry;
@@ -54,11 +58,17 @@ public class RxSessionImpl implements RxSession {
 	private Executor executor = ForkJoinPool.commonPool();
 	private final RxHibernateSessionFactory factory;
 	private final RxHibernateSession rxHibernateSession;
+	private CompletionStage<?> stage;
 	private transient LoadQueryInfluencers loadQueryInfluencers;
 
-	public <T> RxSessionImpl(RxHibernateSessionFactoryImplementor factory, RxHibernateSession session) {
+	public RxSessionImpl(RxHibernateSessionFactoryImplementor factory, RxHibernateSession session) {
+		this( factory, session, new CompletableFuture<>() );
+	}
+
+	public <T> RxSessionImpl(RxHibernateSessionFactoryImplementor factory, RxHibernateSession session, CompletionStage<T> stage) {
 		this.factory = factory;
 		this.rxHibernateSession = session;
+		this.stage = stage;
 		this.loadQueryInfluencers = new LoadQueryInfluencers( factory );
 	}
 
@@ -82,36 +92,6 @@ public class RxSessionImpl implements RxSession {
 	private void setCacheMode(CacheMode cacheMode) {
 		this.rxHibernateSession.setCacheMode( cacheMode );
 	}
-
-	@Override
-	public CompletionStage<Void> flush() {
-//		checkOpen();
-		CompletionStage<Void> flushStage = new CompletableFuture<>();
-		fireFlush( flushStage );
-		return flushStage;
-	}
-
-	private void fireFlush(CompletionStage<Void> flushStage) {
-//		checkTransactionNeeded();
-//		checkTransactionSynchStatus();
-
-//		try {
-//			if ( persistenceContext.getCascadeLevel() > 0 ) {
-//				throw new HibernateException( "Flush during cascade is dangerous" );
-//			}
-
-			FlushEvent flushEvent = new RxFlushEvent( (EventSource) rxHibernateSession, flushStage );
-			for ( FlushEventListener listener : listeners( EventType.FLUSH ) ) {
-				listener.onFlush( flushEvent );
-			}
-
-//			delayedAfterCompletion();
-//		}
-//		catch (RuntimeException e) {
-//			throw exceptionConverter.convert( e );
-//		}
-	}
-
 
 	public <T> CompletionStage<Optional<T>> find(Class<T> entityClass, Object primaryKey, LockModeType lockModeType, Map<String, Object> properties) {
 //		checkOpen();

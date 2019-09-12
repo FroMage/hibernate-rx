@@ -32,6 +32,7 @@ public class RxHibernateSessionImpl extends SessionDelegatorBaseImpl implements 
 	private final ExceptionMapper exceptionMapper = ExceptionMapperStandardImpl.INSTANCE;
 	private transient RxActionQueue rxActionQueue;
 
+
 	public RxHibernateSessionImpl(RxHibernateSessionFactoryImplementor factory, SessionImplementor delegate) {
 		super( delegate );
 		this.factory = factory;

@@ -17,6 +17,4 @@ public interface RxSession {
 	<R> RxQuery<R> createQuery(Class<R> resultType, String jpql);
 
 	StateControl sessionState();
-
-	CompletionStage<Void> flush();
 }
